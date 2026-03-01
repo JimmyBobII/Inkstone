@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inkstone Engine - Editor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
+</head>
+<body>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-target="view-map">Map Editor</button>
+        <button class="tab-btn" data-target="view-db">Database Editor</button>
+    </div>
+
+    <div id="view-map" class="view-section active">
+        
+        <div class="toolbar" id="map-toolbar"></div>
+
+        <div id="floor-controls">
+            <label for="floor-select" style="font-weight:bold;">Current Floor:</label>
+            <select id="floor-select" style="width: 120px;" title="Switch between dungeon floors"></select>
+            <button id="add-floor-btn" class="action-btn export" title="Add a new empty floor to the dungeon">Add Floor</button>
+            <button id="del-floor-btn" class="action-btn danger" title="Permanently delete the current floor">Delete Floor</button>
+        </div>
+
+        <div id="map-container">
+            <div id="map-grid"></div>
+        </div>
+
+        <div class="controls">
+            <button id="save-map-btn" class="action-btn save" title="Save the current map layout to disk">Save Map</button>
+            <button id="export-game-btn" class="action-btn export" title="Export a playable HTML file to the exports folder">Export Game</button>
+        </div>
+        <div id="map-status-msg" class="status-msg"></div>
+    </div>
+
+    <div id="view-db" class="view-section">
+        
+        <div class="db-panel" id="game-name-panel">
+            <h3>Game Settings</h3>
+            <div class="form-group">
+                <label for="game-name-input" style="color: var(--text-main); font-weight: bold; white-space: nowrap; padding-top: 6px;">Game Title:</label>
+                <input type="text" id="game-name-input" placeholder="My Dungeon Game" style="width: 300px; font-size: 15px; font-weight: bold;" title="The name shown in your exported game's title bar and heading">
+            </div>
+            <div style="margin-top: 8px;">
+                <label for="game-intro-input" style="color: var(--text-main); font-weight: bold; font-size: 13px;">Intro Text (shown before party creation):</label>
+                <textarea id="game-intro-input" placeholder="A darkness stirs beneath the old keep..." style="width: 100%; height: 60px; margin-top: 4px; font-family: inherit; font-size: 13px; resize: vertical; box-sizing: border-box;" title="Optional flavour text shown on the title screen when the game starts"></textarea>
+            </div>
+        </div>
+        
+        <div class="db-panel">
+            <h3>Classes</h3>
+            <p style="font-size: 11px; color: var(--text-dim); margin-top: 0;">Create hero classes. Click a class below to edit its progression and spells.</p>
+            <ul id="class-list" class="db-list"></ul>
+            <div class="form-group" id="class-form">
+                <input type="text" id="class-id" placeholder="ID (e.g. warrior)" style="width: 120px;" title="Unique ID used internally — lowercase, no spaces">
+                <input type="text" id="class-name" placeholder="Class Name" style="width: 140px;" title="Display name shown to the player">
+                <input type="number" id="class-hp" placeholder="Base HP" style="width: 80px;" title="Starting hit points at level 1">
+                <input type="number" id="class-atk" placeholder="Base ATK" style="width: 80px;" title="Starting attack power at level 1">
+                <input type="number" id="class-spells" placeholder="Base Spells" style="width: 90px;" title="Starting spell slots at level 1 (0 for non-casters)">
+                <button class="action-btn" style="background: var(--accent-green); padding: 8px;" id="add-class-btn" title="Create a new class with these stats">Add Class</button>
+            </div>
+
+            <div id="class-editor-section" style="display:none; margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                <h4 id="editing-class-title" style="margin: 0 0 10px 0; color: var(--accent-green);">Editing: None</h4>
+                
+                <h4 style="margin: 10px 0 5px 0; color: var(--text-dim);">Spell Unlocks</h4>
+                <div class="form-group">
+                    <select id="class-spell-level" title="Level unlocked" style="width: 80px;"></select>
+                    <select id="class-spell-select" title="Spell to unlock" style="width: 150px;"></select>
+                    <button class="action-btn" id="add-class-spell-btn" style="background: var(--accent-blue); padding: 6px;">Add Spell Unlock</button>
+                </div>
+                <ul id="class-spell-list" class="db-list" style="max-height: 100px; margin-top: 5px;"></ul>
+
+                <h4 style="margin: 10px 0 5px 0; color: var(--text-dim);">20-Level Stat Progression</h4>
+                <div style="max-height: 200px; overflow-y: auto; background: #fff; border: 1px solid var(--border-color);">
+                    <table style="width: 100%; text-align: center; border-collapse: collapse; font-size: 14px;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-panel);">
+                            <tr>
+                                <th style="padding: 6px; border-bottom: 1px solid var(--border-color);">Level</th>
+                                <th style="padding: 6px; border-bottom: 1px solid var(--border-color);">XP Req</th>
+                                <th style="padding: 6px; border-bottom: 1px solid var(--border-color);">HP Gain</th>
+                                <th style="padding: 6px; border-bottom: 1px solid var(--border-color);">ATK Gain</th>
+                                <th style="padding: 6px; border-bottom: 1px solid var(--border-color);">Spells Gain</th>
+                            </tr>
+                        </thead>
+                        <tbody id="progression-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="db-panel">
+            <h3>Spells</h3>
+            <ul id="spell-list" class="db-list"></ul>
+            <div class="form-group" id="spell-form">
+                <input type="text" id="spell-id" placeholder="ID (e.g. heal1)" style="width: 100px;" title="Unique ID — lowercase, no spaces">
+                <input type="text" id="spell-name" placeholder="Spell Name" style="width: 150px;" title="Display name shown in combat">
+                <select id="spell-type" title="Damage spells scale with caster ATK, heal spells restore flat HP">
+                    <option value="damage">Damage (Scales w/ ATK)</option>
+                    <option value="heal">Heal (Flat Value)</option>
+                </select>
+                <input type="number" id="spell-val" placeholder="Value" style="width: 80px;" title="Base damage or heal amount">
+                <button class="action-btn" style="background: var(--accent-green); padding: 8px;" id="add-spell-btn" title="Create a new spell">Add Spell</button>
+            </div>
+        </div>
+
+        <div class="db-panel">
+            <h3>Town Settings</h3>
+            <div class="form-group" id="town-form"></div>
+            <h4 style="margin: 10px 0 5px 0; color: var(--text-dim);">Shop Inventory (Max 6 Items)</h4>
+            <ul id="shop-list" class="db-list"></ul>
+            <div class="form-group" id="shop-form"></div>
+        </div>
+
+        <div class="db-panel">
+            <h3>Items</h3>
+            <ul id="item-list" class="db-list"></ul>
+            <div class="form-group" id="item-form"></div>
+        </div>
+
+        <div class="db-panel">
+            <h3>Monsters</h3>
+            <ul id="monster-list" class="db-list"></ul>
+            <div class="monster-creator">
+                <div class="monster-form" id="monster-form"></div>
+                <div class="ink-container">
+                    <div id="ink-grid"></div>
+                    <span class="hint-text">Draw monster (Click & Drag)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="db-panel">
+            <h3>NPCs</h3>
+            <ul id="npc-list" class="db-list"></ul>
+            <div class="monster-creator">
+                <div class="monster-form" id="npc-form"></div>
+                <div class="ink-container">
+                    <div id="npc-ink-grid"></div>
+                    <span class="hint-text">Draw NPC (Click & Drag)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="db-panel" id="music-panel">
+            <h3>Music Composer</h3>
+            <p style="font-size: 11px; color: var(--text-dim); margin-top: 0;">Create procedural music loops for each floor and for town. Select a floor/town slot, pick genre &amp; vibe, generate, preview, and lock it in.</p>
+            
+            <div class="form-group" style="margin-bottom: 10px;">
+                <select id="music-slot-select" style="width: 200px;" title="Choose which game area to compose music for">
+                    <option value="town">Town</option>
+                </select>
+                <select id="music-genre" title="Musical genre/instrument style">
+                    <option value="fantasy">🗡 Fantasy</option>
+                    <option value="scifi">🚀 Sci-Fi</option>
+                    <option value="horror">🩸 Horror</option>
+                    <option value="weird">👽 Weird (Quirky)</option>
+                </select>
+                <select id="music-vibe" title="Musical mood/tempo">
+                    <option value="fun">Fun</option>
+                    <option value="action">Action</option>
+                    <option value="gloomy">Gloomy</option>
+                    <option value="spooky">Spooky</option>
+                    <option value="dramatic">Dramatic</option>
+                    <option value="epic">Epic</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+                <button class="action-btn" style="background: var(--accent-blue); padding: 8px;" id="music-generate-btn" title="Generate a new procedural loop with the selected settings">Generate</button>
+                <button class="action-btn" style="background: var(--accent-green); padding: 8px;" id="music-play-btn" disabled title="Preview the generated loop">Play</button>
+                <button class="action-btn" style="background: #8b3030; padding: 8px;" id="music-stop-btn" disabled title="Stop playback">Stop</button>
+                <button class="action-btn" style="background: #6a5acd; color:#fff; padding: 8px;" id="music-lockin-btn" disabled title="Lock this track into the selected slot">Lock In</button>
+                <button class="action-btn" style="background: var(--border-color); padding: 8px;" id="music-clear-btn" title="Remove the locked-in track for this slot">Clear Slot</button>
+            </div>
+            <div id="music-status" style="font-size: 12px; color: var(--text-dim); height: 18px; margin-top: 4px;">Ready.</div>
+            <ul id="music-track-list" class="db-list" style="margin-top: 10px;"></ul>
+        </div>
+        
+        <div class="controls">
+            <button id="save-db-btn" class="action-btn save" title="Save all database changes (classes, spells, items, monsters, NPCs, town)">Save Database</button>
+        </div>
+        <div id="db-status-msg" class="status-msg"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/map_editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/db_editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ink_grid.js') }}"></script>
+    
+</body>
+</html>

@@ -1,0 +1,2289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ db_data.gameName or 'The Grimoire Engine' }} - Exported Game</title>
+    <style>
+        :root {
+            --bg-color: #2b2520;
+            --paper-color: #f0e6d0; 
+            --ink-color: #1a1612;      
+            --highlight: #8b3030;
+            --active-hero: #c4a030;
+            --border-style: 3px solid var(--ink-color);
+            --warm-shadow: rgba(26, 22, 18, 0.5);
+            --panel-bg: #302a24;
+            --panel-border: #5a4f44;
+            --text-dim: #a89880;
+            --gold-color: #c4a43a;
+            --mana-color: #5b7fa5;
+            --hp-red: #aa3333;
+        }
+
+        body { 
+            background-color: var(--bg-color); 
+            background-image: 
+                radial-gradient(ellipse at 30% 0%, rgba(90, 70, 50, 0.1) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 100%, rgba(90, 70, 50, 0.08) 0%, transparent 50%);
+            color: var(--paper-color); 
+            font-family: monospace, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            margin-top: 20px; 
+        }
+
+        h2 { 
+            border-bottom: 3px double var(--paper-color); 
+            padding-bottom: 5px; 
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-size: 16px;
+        }
+
+        .game-layout { display: flex; gap: 20px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+        
+        /* Updated layout styles */
+        .left-col { display: flex; flex-direction: column; gap: 15px; }
+        .right-col { display: flex; flex-direction: row; gap: 15px; align-items: flex-start; }
+        
+        canvas { 
+            background-color: var(--paper-color); 
+            border: var(--border-style); 
+            box-shadow: 2px 3px 12px var(--warm-shadow), inset 0 0 30px rgba(0,0,0,0.03); 
+        }
+
+        /* Fixed Minimap: Perfect square, no cropping */
+        #minimap {
+            width: 220px; 
+            height: 220px; 
+            object-fit: contain;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 2px solid var(--panel-border);
+            padding: 10px;
+            box-sizing: border-box;
+            color: var(--paper-color);
+            box-shadow: 1px 2px 6px var(--warm-shadow);
+        }
+
+        #message-log { width: 408px; height: 120px; overflow-y: auto; font-size: 14px; border-style: solid solid solid double; }
+        #message-log div { margin-bottom: 4px; line-height: 1.4; color: var(--text-dim); }
+        
+        #stats-panel, #inventory-panel { width: 220px; display: flex; flex-direction: column; }
+        #inventory-panel { max-height: 220px; overflow-y: auto; }
+        #inventory-list { flex-grow: 1; overflow-y: auto; }
+        
+        .panel-header { margin: 0 0 10px 0; border-bottom: 1px dashed var(--panel-border); padding-bottom: 5px; color: var(--paper-color); letter-spacing: 1px; text-transform: uppercase; font-size: 13px; }
+
+        .inv-item { 
+            background: #3a342e; border: 1px solid var(--panel-border); color: var(--paper-color); 
+            padding: 6px; margin-bottom: 5px; cursor: pointer; 
+            width: 100%; text-align: left; font-family: monospace; 
+        }
+        .inv-item:hover { background: #4a443a; border-color: var(--text-dim); }
+
+        .controls { text-align: center; width: 408px; height: 60px; display: flex; align-items: center; justify-content: center;}
+        kbd { background-color: #3a342e; padding: 4px 8px; border-radius: 3px; font-weight: bold; border: 1px solid var(--panel-border); border-bottom: 2px solid var(--ink-color); color: var(--paper-color); }
+        
+        #combat-menu { display: none; gap: 10px; justify-content: center; width: 100%; }
+        .combat-btn, .town-btn { 
+            background: var(--ink-color); color: var(--paper-color); 
+            border: 2px solid var(--panel-border); padding: 8px 15px; 
+            cursor: pointer; font-family: monospace; font-weight: bold; font-size: 16px;
+            transition: background 0.15s;
+        }
+        .combat-btn:hover:not(:disabled), .town-btn:hover { background: var(--highlight); border-color: #c08070; }
+        .combat-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+
+        /* Party Creation & Town Styles */
+        #party-creation-screen, #town-screen {
+            width: 408px; height: 408px; 
+            flex-direction: column;
+            background-color: var(--paper-color);
+            background-image: 
+                repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.03) 19px, rgba(0,0,0,0.03) 20px),
+                repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.03) 19px, rgba(0,0,0,0.03) 20px);
+            color: var(--ink-color);
+            border: var(--border-style);
+            box-sizing: border-box;
+            padding: 20px;
+            box-shadow: 2px 3px 12px var(--warm-shadow);
+        }
+        
+        #party-creation-screen { display: none; }
+        #town-screen { display: none; }
+
+        .class-btn {
+            background: var(--ink-color); color: var(--paper-color); border: 1px solid var(--panel-border);
+            padding: 8px; margin-bottom: 5px; cursor: pointer; width: 100%;
+            font-family: monospace; font-weight: bold; text-align: left;
+        }
+        .class-btn:hover { background: #3a342e; }
+
+        .town-btn { width: 100%; margin-bottom: 10px; text-align: left; padding: 12px; }
+        #town-message { margin-top: auto; font-style: italic; font-weight: bold; color: var(--highlight); text-align: center; height: 40px;}
+        .shop-row { display: flex; justify-content: space-between; margin-bottom: 5px; border-bottom: 1px dashed #b0a890; padding-bottom: 5px;}
+        .shop-buy-btn { background: #e8dcc8; border: 1px solid var(--ink-color); cursor: pointer; font-family: monospace; font-weight: bold; color: var(--ink-color);}
+        .shop-buy-btn:hover { background: #d4c4a8; }
+
+        #victory-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(26, 22, 18, 0.95); z-index: 999;
+            flex-direction: column; align-items: center; justify-content: center;
+            color: var(--paper-color); font-family: monospace; text-align: center;
+        }
+        #victory-screen h1 { font-size: 48px; color: var(--active-hero); margin-bottom: 10px; letter-spacing: 6px; text-transform: uppercase; }
+        #victory-screen p { font-size: 20px; max-width: 500px; line-height: 1.6; }
+
+        #gameover-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(26, 22, 18, 0.95); z-index: 999;
+            flex-direction: column; align-items: center; justify-content: center;
+            color: var(--paper-color); font-family: monospace; text-align: center;
+        }
+        #gameover-screen h1 { font-size: 48px; color: var(--hp-red); margin-bottom: 10px; letter-spacing: 6px; text-transform: uppercase; }
+        #gameover-screen p { font-size: 20px; max-width: 500px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <h2>{{ db_data.gameName or 'The Grimoire Engine' }}</h2>
+    <div id="victory-screen">
+        <h1>VICTORY</h1>
+        <p id="victory-text"></p>
+        <p style="margin-top: 30px; color: var(--text-dim); font-size: 14px;">The adventure is complete. Thank you for playing.</p>
+    </div>
+
+    <div id="gameover-screen">
+        <h1>GAME OVER</h1>
+        <p>Your party has fallen, and you lack the gold to resurrect them.</p>
+        <p style="margin-top: 20px; color: var(--text-dim); font-size: 14px;">Load a previous save to continue.</p>
+        <button class="combat-btn" style="margin-top: 20px; font-size: 18px; padding: 12px 30px;" onclick="Game.loadGame()">Load Save</button>
+    </div>
+    
+    <div class="game-layout">
+        <div class="left-col">
+            
+            <div id="title-screen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding: 20px;">
+                <h1 style="font-size: 28px; letter-spacing: 3px; border-bottom: 2px solid var(--ink-color); padding-bottom: 10px; margin-bottom: 15px;" id="title-screen-name"></h1>
+                <p id="title-screen-intro" style="font-size: 15px; line-height: 1.7; max-width: 400px; color: var(--text-dim); margin-bottom: 25px; white-space: pre-line;"></p>
+                <button class="town-btn" style="background: var(--highlight); font-size: 16px; padding: 10px 30px;" onclick="Game.dismissTitle()">Begin Adventure</button>
+                <button class="town-btn" style="background:#3a342e; margin-top: 10px; font-size: 13px;" onclick="Game.loadGame()">Load Previous Save</button>
+            </div>
+
+            <div id="party-creation-screen">
+                <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid var(--ink-color);">Assemble Party</h2>
+                <p style="text-align: center; font-size: 14px; margin-top: 0;">Select 3 heroes to begin.</p>
+                
+                <div style="flex-grow: 1; overflow-y: auto; width: 100%;">
+                    <h4 style="margin: 0 0 5px 0;">Available Classes</h4>
+                    <div id="class-selection-list" style="margin-bottom: 15px;"></div>
+                    
+                    <h4 style="margin: 0 0 5px 0;">Your Party (<span id="party-count">0</span>/3)</h4>
+                    <div id="current-party-list" style="min-height: 80px; background: #e0d4be; border: 1px inset #b0a890; padding: 5px;"></div>
+                </div>
+                
+                <button id="btn-start-adventure" class="town-btn" style="display:none; margin-top: 10px; text-align:center; background: var(--highlight);" onclick="Game.startAdventure()">Enter Town</button>
+            </div>
+
+            <div id="town-screen">
+                <h2 id="town-title" style="margin-top: 0; text-align: center; border-bottom: 2px solid var(--ink-color);">Town Name</h2>
+                
+                <div id="town-main-menu">
+                    <button class="town-btn" id="btn-levelup" onclick="Game.Town.levelUp()" style="display: none; border-color: var(--gold-color); color: var(--gold-color);">Level Up Ready! (Free)</button>
+                    <button class="town-btn" id="btn-tavern" onclick="Game.Town.visitTavern()" title="Fully restore HP and spell slots for all living party members">Rest at Tavern</button>
+                    <button class="town-btn" id="btn-church" onclick="Game.Town.visitChurch()" title="Resurrect all fallen party members with full HP">Visit Church</button>
+                    <button class="town-btn" id="btn-shop" onclick="Game.Town.openShop()" title="Buy and sell items, weapons, and potions">Visit Shop</button>
+                    <button class="town-btn" style="background: var(--highlight);" onclick="Game.Town.enterDungeon()" title="Enter the dungeon on Floor 1">Enter Dungeon</button>
+                    <div style="display:flex; gap:8px; margin-top: auto;">
+                        <button class="town-btn" style="flex:1; text-align:center; background:#3a4a2e; font-size:13px;" onclick="Game.saveGame()">Save Game</button>
+                        <button class="town-btn" style="flex:1; text-align:center; background:#3a342e; font-size:13px;" onclick="Game.loadGame()">Load Game</button>
+                    </div>
+                </div>
+
+                <div id="town-shop-menu" style="display: none; height: 100%; flex-direction: column;">
+                    <h3 style="margin: 0 0 10px 0;" id="shopkeeper-name">Shop</h3>
+                    <div style="flex-grow: 1; overflow-y: auto;">
+                        <h4>Buy</h4>
+                        <div id="shop-buy-list"></div>
+                        <h4>Sell (50% Value)</h4>
+                        <div id="shop-sell-list"></div>
+                    </div>
+                    <button class="town-btn" style="margin-top: 10px; text-align: center;" onclick="Game.Town.closeShop()">Leave Shop</button>
+                </div>
+
+                <div id="town-message">Welcome to town. You are safe here.</div>
+            </div>
+
+            <canvas id="viewport" width="400" height="400" style="display: none;"></canvas>
+            
+            <div id="message-log" class="panel">
+                <div>> The adventure begins.</div>
+            </div>
+            
+            <div class="controls panel" id="controls-container" style="display: none;">
+                <div id="exploration-menu">
+                    <p><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> Move | <kbd>E</kbd> Interact</p>
+                </div>
+                <div id="combat-menu">
+                    <button class="combat-btn" onclick="Game.combatAction('attack')">Attack</button>
+                    <button class="combat-btn" onclick="Game.combatAction('defend')">Defend</button>
+                    <button class="combat-btn" id="btn-combat-spell" onclick="Game.combatAction('spell')">Spell</button>
+                    <button class="combat-btn" onclick="Game.combatAction('run')">Run</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="right-col">
+            <canvas id="minimap" width="200" height="200"></canvas>
+            
+            <div id="stats-panel" class="panel">
+                <h3 class="panel-header">Party Status</h3>
+                
+                <div id="party-display"></div>
+                
+                <div id="gold-display" style="color: var(--gold-color); font-weight: bold; margin-top: 10px;">Gold: 0</div>
+                <div id="floor-display" style="margin-top: 5px; color: var(--mana-color); font-weight:bold; display:none;">Floor: 1</div>
+            </div>
+            
+            <div id="inventory-panel" class="panel">
+                <h3 class="panel-header">Inventory</h3>
+                <div id="inventory-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- FLASK DATA INJECTIONS ---
+        const rawFloors = {{ map_data | tojson | safe }};
+        const rawTownData = {{ db_data.town | tojson | safe }};
+        const rawGameName = {{ (db_data.gameName or 'The Grimoire Engine') | tojson | safe }};
+        const rawIntroText = {{ (db_data.introText or '') | tojson | safe }};
+        
+        const rawClasses = {{ db_data.classes | tojson | safe }};
+        const classDB = {};
+        rawClasses.forEach(c => classDB[c.id] = c);
+
+        const rawSpells = {{ db_data.spells | tojson | safe }};
+        const spellDB = {};
+        rawSpells.forEach(s => spellDB[s.id] = s);
+        
+        const rawItems = {{ db_data['items'] | tojson | safe }};
+        const itemDB = {};
+        rawItems.forEach(i => itemDB[i.id] = i);
+        
+        const rawMonsters = {{ db_data['monsters'] | tojson | safe }};
+        const monsterDB = {};
+        rawMonsters.forEach(m => monsterDB[m.id] = m);
+
+        const rawNpcs = {{ db_data['npcs'] | tojson | safe }};
+        const npcDB = {};
+        rawNpcs.forEach(n => npcDB[n.id] = n);
+
+        const rawMusic = {{ (db_data.music or {'town': None, 'floors': {}}) | tojson | safe }};
+
+        // --- MUSIC ENGINE ---
+        const MusicEngine = {
+            ctx: null,
+            currentSource: null,
+            currentTrackKey: null,
+            bufferCache: {},
+            muted: false,
+
+            async init() {
+                // Pre-decode all tracks - defer AudioContext until needed
+                if (!rawMusic) return;
+                if (!rawMusic.town && (!rawMusic.floors || Object.keys(rawMusic.floors).length === 0)) return;
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) { console.warn('AudioContext not available:', e); return; }
+                const decode = async (key, trackData) => {
+                    if (!trackData || !trackData.wav) return;
+                    try {
+                        const binary = atob(trackData.wav);
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        this.bufferCache[key] = await this.ctx.decodeAudioData(bytes.buffer);
+                    } catch(e) { console.warn('Failed to decode track:', key, e); }
+                };
+                try {
+                    if (rawMusic.town) await decode('town', rawMusic.town);
+                    if (rawMusic.floors) {
+                        for (const key of Object.keys(rawMusic.floors)) {
+                            if (rawMusic.floors[key]) await decode(key, rawMusic.floors[key]);
+                        }
+                    }
+                } catch(e) { console.warn('Music init error:', e); }
+            },
+
+            play(trackKey) {
+                if (this.muted || !this.ctx) return;
+                if (this.currentTrackKey === trackKey && this.currentSource) return; // Already playing
+                this.stop();
+                const buffer = this.bufferCache[trackKey];
+                if (!buffer) return;
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                this.currentSource = this.ctx.createBufferSource();
+                this.currentSource.buffer = buffer;
+                this.currentSource.loop = true;
+                this.currentSource.connect(this.ctx.destination);
+                this.currentSource.start();
+                this.currentTrackKey = trackKey;
+            },
+
+            stop() {
+                if (this.currentSource) {
+                    try { this.currentSource.stop(); } catch(e) {}
+                    this.currentSource = null;
+                }
+                this.currentTrackKey = null;
+            },
+
+            toggle() {
+                this.muted = !this.muted;
+                if (this.muted) this.stop();
+            },
+
+            // Determine what to play based on game state
+            playForState(state, floorIndex) {
+                try {
+                if (state === 'town') {
+                    this.play('town');
+                } else if (state === 'combat') {
+                    const key = floorIndex + '-combat';
+                    if (this.bufferCache[key]) this.play(key);
+                    // If no combat track, keep current exploration track
+                } else if (state === 'exploration') {
+                    const key = floorIndex + '-explore';
+                    if (this.bufferCache[key]) this.play(key);
+                    else this.stop();
+                } else {
+                    // party_creation, victory, gameover — no music or keep silent
+                }
+                } catch(e) { console.warn('MusicEngine playForState error:', e); }
+            }
+        };
+
+        // --- CORE GAME ENGINE ---
+        const Game = {
+            state: "party_creation",
+            player: { x: 10, y: 10, dir: 0 },
+            lastPos: { x: 10, y: 10 },
+            
+            party: [],
+            gold: 0,
+            inventory: [],
+            
+            floors: rawFloors,
+            currentFloor: 0,
+            mapGrid: null,
+            mapItems: null,
+            mapMonsters: null,
+            mapChests: null, 
+            mapDoors: null,  
+            mapNpcs: null,   
+            mapWins: null,   
+            completedNpcs: new Set(), 
+            explored: [], 
+            minimapVisible: true,
+            
+            combat: { 
+                currentEnemy: null, 
+                enemyCoords: { x: 0, y: 0 }, 
+                turnIndex: 0, 
+                defending: [false, false, false]
+            },
+
+            canvas: document.getElementById('viewport'),
+            ctx: null,
+            miniCanvas: document.getElementById('minimap'),
+            miniCtx: null,
+
+            init() {
+                this.ctx = this.canvas.getContext('2d');
+                this.miniCtx = this.miniCanvas.getContext('2d');
+                
+                this.floors.forEach(() => {
+                    this.explored.push(Array(20).fill(null).map(() => Array(20).fill(false)));
+                });
+                
+                this.Town.init();
+                try { MusicEngine.init(); } catch(e) { console.warn('MusicEngine init failed:', e); }
+                
+                this.loadFloor(0, true, true);
+                this.renderMinimap(); 
+                this.setupInput();
+
+                this.showTitleScreen();
+            },
+
+            showTitleScreen() {
+                this.state = "party_creation";
+                document.getElementById('party-creation-screen').style.display = 'none';
+                document.getElementById('town-screen').style.display = 'none';
+                document.getElementById('viewport').style.display = 'none';
+                document.getElementById('controls-container').style.display = 'none';
+                document.getElementById('title-screen').style.display = 'flex';
+                document.getElementById('title-screen-name').innerText = rawGameName;
+                document.getElementById('title-screen-intro').innerText = rawIntroText || 'A dungeon awaits...';
+            },
+
+            dismissTitle() {
+                document.getElementById('title-screen').style.display = 'none';
+                this.renderPartyCreation();
+            },
+
+            renderPartyCreation() {
+                this.state = "party_creation";
+                document.getElementById('title-screen').style.display = 'none';
+                document.getElementById('town-screen').style.display = 'none';
+                document.getElementById('viewport').style.display = 'none';
+                document.getElementById('controls-container').style.display = 'none';
+                document.getElementById('party-creation-screen').style.display = 'flex';
+
+                const classListDiv = document.getElementById('class-selection-list');
+                classListDiv.innerHTML = '';
+                
+                if (Object.keys(classDB).length === 0) {
+                    classListDiv.innerHTML = '<em>No classes found in Database! Please create them in the Editor.</em>';
+                    return;
+                }
+
+                for (let classId in classDB) {
+                    let cls = classDB[classId];
+                    let btn = document.createElement('button');
+                    btn.className = 'class-btn';
+                    
+                    let spellInfo = '';
+                    if (cls.baseSpells > 0) {
+                        let startingSpells = (cls.spellList || []).filter(s => s.level <= 1).map(s => spellDB[s.spellId]).filter(s => s);
+                        if (startingSpells.length > 0) {
+                            spellInfo = `<div style="font-size:11px; color:#7a9a6a; margin-top:2px;">Spells: ${cls.baseSpells} — Knows: ${startingSpells.map(s => s.name).join(', ')}</div>`;
+                        } else {
+                            let firstSpell = (cls.spellList || []).sort((a,b) => a.level - b.level)[0];
+                            let learnInfo = firstSpell && spellDB[firstSpell.spellId] ? `Learns ${spellDB[firstSpell.spellId].name} at Lv${firstSpell.level}` : 'No spells assigned';
+                            spellInfo = `<div style="font-size:11px; color:#a89060; margin-top:2px;">Spells: ${cls.baseSpells} — ${learnInfo}</div>`;
+                        }
+                    } else {
+                        spellInfo = `<div style="font-size:11px; color:#8a7e6e; margin-top:2px;">No magic</div>`;
+                    }
+                    
+                    btn.innerHTML = `<div style="text-align:left;">${cls.name} <span style="color:#a89880; font-size:12px; float:right;">HP:${cls.baseHp} ATK:${cls.baseAtk}</span>${spellInfo}</div>`;
+                    btn.onclick = () => this.addPartyMember(classId);
+                    classListDiv.appendChild(btn);
+                }
+                
+                this.updatePartyCreationUI();
+            },
+
+            addPartyMember(classId) {
+                if (this.party.length >= 3) return;
+                
+                let cls = classDB[classId];
+                
+                let defaultName = "Hero " + (this.party.length + 1);
+                let customName = prompt(`Enter a name for your ${cls.name}:`, defaultName);
+                
+                if (customName === null) return; 
+                customName = customName.trim() || defaultName;
+
+                this.party.push({
+                    name: customName,
+                    classId: cls.id,
+                    className: cls.name,
+                    level: 1,
+                    xp: 0,
+                    hp: cls.baseHp,
+                    maxHp: cls.baseHp,
+                    atk: cls.baseAtk,
+                    spellsLeft: cls.baseSpells,
+                    maxSpells: cls.baseSpells,
+                    weapon: null
+                });
+                this.updatePartyCreationUI();
+            },
+
+            removePartyMember(index) {
+                this.party.splice(index, 1);
+                this.updatePartyCreationUI();
+            },
+
+            updatePartyCreationUI() {
+                document.getElementById('party-count').innerText = this.party.length;
+                const currentPartyDiv = document.getElementById('current-party-list');
+                currentPartyDiv.innerHTML = '';
+                
+                if (this.party.length === 0) {
+                    currentPartyDiv.innerHTML = '<em style="color:#8a7e6e;">Party is empty.</em>';
+                } else {
+                    this.party.forEach((m, index) => {
+                        let div = document.createElement('div');
+                        div.style.marginBottom = '5px';
+                        div.style.color = '#111';
+                        div.innerHTML = `<strong>${m.name}</strong> (${m.className}) <button style="float:right; cursor:pointer;" onclick="Game.removePartyMember(${index})">X</button>`;
+                        currentPartyDiv.appendChild(div);
+                    });
+                }
+
+                if (this.party.length === 3) {
+                    document.getElementById('btn-start-adventure').style.display = 'block';
+                } else {
+                    document.getElementById('btn-start-adventure').style.display = 'none';
+                }
+            },
+
+            startAdventure() {
+                document.getElementById('party-creation-screen').style.display = 'none';
+                this.Town.goToTown();
+                this.updateUI();
+                this.log("Your party forms in town, ready for adventure.");
+            },
+
+            loadFloor(fIndex, goingDown, silent = false) {
+                this.currentFloor = fIndex;
+                this.mapGrid = this.floors[fIndex].grid;
+                this.mapItems = this.floors[fIndex].placements.items || {};
+                this.mapMonsters = this.floors[fIndex].placements.monsters || {};
+                this.mapChests = this.floors[fIndex].placements.chests || {};
+                this.mapDoors = this.floors[fIndex].placements.doors || {};
+                this.mapNpcs = this.floors[fIndex].placements.npcs || {};
+                this.mapWins = this.floors[fIndex].placements.wins || {};
+                
+                let spawnFound = false;
+                let targetTile = goingDown ? 6 : 7; 
+
+                for(let y = 0; y < 20; y++) {
+                    for(let x = 0; x < 20; x++) {
+                        if(this.mapGrid[y][x] === targetTile) {
+                            // Find a safe adjacent tile AND orient the player away from the stairs
+                            let adjacents = [
+                                {x: x, y: y-1, d: 0}, // North of stairs -> face North
+                                {x: x+1, y: y, d: 1}, // East of stairs -> face East
+                                {x: x, y: y+1, d: 2}, // South of stairs -> face South
+                                {x: x-1, y: y, d: 3}  // West of stairs -> face West
+                            ];
+                            let placed = false;
+                            for (let adj of adjacents) {
+                                if (adj.x >= 0 && adj.x < 20 && adj.y >= 0 && adj.y < 20) {
+                                    let t = this.mapGrid[adj.y][adj.x];
+                                    if ([0, 3, 4, 13].includes(t)) {
+                                        this.player.x = adj.x; 
+                                        this.player.y = adj.y;
+                                        this.player.dir = adj.d; // Dynamically face outwards
+                                        placed = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!placed) { this.player.x = x; this.player.y = y; }
+                            spawnFound = true;
+                            break;
+                        }
+                    }
+                    if(spawnFound) break;
+                }
+                
+                if(!spawnFound) {
+                    this.player.x = 10; this.player.y = 10;
+                }
+                
+                this.updateUI();
+                if (!silent) this.render();
+                if (this.state === 'exploration') MusicEngine.playForState('exploration', this.currentFloor);
+            },
+
+            log(text) {
+                const logBox = document.getElementById('message-log');
+                logBox.innerHTML += `<div>> ${text}</div>`;
+                logBox.scrollTop = logBox.scrollHeight;
+            },
+
+            updateUI() {
+                const pDisp = document.getElementById('party-display');
+                if (pDisp) {
+                    pDisp.innerHTML = '';
+                    this.party.forEach((m, idx) => {
+                        let cls = classDB[m.classId];
+                        let nextLvl = cls ? cls.progression.find(p => p.level === m.level + 1) : null;
+                        let xpText = nextLvl ? `${m.xp} / ${nextLvl.xpReq}` : `MAX`;
+                        let deadStyle = m.hp <= 0 ? 'color: var(--hp-red); text-decoration: line-through;' : 'color: var(--paper-color);';
+                        
+                        let isMyTurn = (this.state === "combat" && this.combat.turnIndex === idx && m.hp > 0);
+                        let containerStyle = isMyTurn ? 
+                            'border: 2px solid var(--active-hero); background: #3a3020; padding: 4px; margin-bottom: 5px;' : 
+                            'border-bottom: 1px dashed var(--panel-border); padding-bottom: 5px; margin-bottom: 5px;';
+                        
+                        let replaceBtn = '';
+                        if (this.state === "town" && m.hp <= 0) {
+                            replaceBtn = `<button onclick="Game.replaceMember(${idx})" style="background:var(--panel-border); border:1px solid var(--paper-color); color:var(--paper-color); padding:3px 8px; cursor:pointer; font-family:monospace; font-size:12px; margin-top:3px;" title="Dismiss this hero and recruit a new one for free">Replace Hero (Free)</button>`;
+                        }
+
+                        let weaponText = m.weapon ? `⚔ ${m.weapon.name} (+${m.weapon.atkBonus || 0})` : '⚔ None';
+
+                        pDisp.innerHTML += `
+                            <div style="${containerStyle}">
+                                <div style="font-weight: bold; ${deadStyle}">${m.name} (${m.className})</div>
+                                <div style="font-size: 13px;">Lvl: ${m.level} | XP: ${xpText}</div>
+                                <div style="font-size: 13px;">HP: ${m.hp} / ${m.maxHp}</div>
+                                <div style="font-size: 13px;">ATK: ${m.atk}${m.weapon ? '+' + (m.weapon.atkBonus || 0) : ''} | Spells: ${m.spellsLeft} / ${m.maxSpells}</div>
+                                <div style="font-size: 12px; color: var(--text-dim);">${weaponText}</div>
+                                ${replaceBtn}
+                            </div>
+                        `;
+                    });
+                }
+
+                let spellBtn = document.getElementById('btn-combat-spell');
+                if (this.state === "combat" && this.combat.turnIndex < 3 && spellBtn) {
+                    let activeHero = this.party[this.combat.turnIndex];
+                    if (activeHero && activeHero.hp > 0) {
+                        let cls = classDB[activeHero.classId];
+                        let knownSpells = cls ? cls.spellList.filter(s => s.level <= activeHero.level).map(s => spellDB[s.spellId]).filter(s => s) : [];
+                        
+                        if (activeHero.spellsLeft <= 0 || knownSpells.length === 0) {
+                            spellBtn.disabled = true;
+                            spellBtn.style.opacity = '0.5';
+                            spellBtn.innerText = knownSpells.length === 0 ? 'No Spells' : 'Spell (0)';
+                            spellBtn.title = '';
+                        } else {
+                            spellBtn.disabled = false;
+                            spellBtn.style.opacity = '1';
+                            spellBtn.innerText = `Spell (${activeHero.spellsLeft})`;
+                            spellBtn.title = knownSpells.map(s => `${s.name}: ${s.type === 'heal' ? 'Heal ' + s.val + ' HP' : 'Dmg ' + s.val}`).join(' | ');
+                        }
+                    }
+                }
+                
+                document.getElementById('gold-display').innerText = `Gold: ${this.gold}`;
+                
+                const fDisp = document.getElementById('floor-display');
+                if (this.state === "town" || this.state === "party_creation") { 
+                    fDisp.style.display = 'none'; 
+                } else { 
+                    fDisp.style.display = 'block'; fDisp.innerText = `Floor: ${this.currentFloor + 1}`; 
+                }
+                
+                const invList = document.getElementById('inventory-list');
+                invList.innerHTML = '';
+                this.inventory.forEach((item, index) => {
+                    let btn = document.createElement('button');
+                    btn.className = 'inv-item';
+                    btn.innerText = item.type === 'weapon' ? `⚔ ${item.name} (+${item.atkBonus || 0})` : item.name;
+                    btn.onclick = () => { if(this.state !== "party_creation") this.useItem(index); };
+                    invList.appendChild(btn);
+                });
+            },
+
+            saveGame() {
+                if (this.state !== "town") return;
+                try {
+                    const saveData = {
+                        version: 3, 
+                        party: JSON.parse(JSON.stringify(this.party)),
+                        gold: this.gold,
+                        inventory: JSON.parse(JSON.stringify(this.inventory)),
+                        currentFloor: this.currentFloor,
+                        floors: JSON.parse(JSON.stringify(this.floors)),
+                        explored: JSON.parse(JSON.stringify(this.explored)),
+                        completedNpcs: Array.from(this.completedNpcs),
+                        activeShopItems: JSON.parse(JSON.stringify(this.Town.activeShopItems))
+                    };
+                    localStorage.setItem('inkstone_save_' + rawGameName, JSON.stringify(saveData));
+                    this.Town.msg("Game saved!");
+                    this.log("Progress saved.");
+                } catch (e) {
+                    this.Town.msg("Save failed! Storage may be full.");
+                }
+            },
+
+            loadGame() {
+                if (this.state !== "town" && this.state !== "party_creation" && this.state !== "gameover") return;
+                try {
+                    const raw = localStorage.getItem('inkstone_save_' + rawGameName);
+                    if (!raw) return alert("No save file found.");
+
+                    const s = JSON.parse(raw);
+                    if (s.version < 2) {
+                        alert("Old save version detected. Please start a new game.");
+                        return;
+                    }
+
+                    this.party = s.party;
+                    // Migrate v2 saves: add weapon slot if missing
+                    this.party.forEach(m => { if (!('weapon' in m)) m.weapon = null; });
+                    this.gold = s.gold;
+                    this.inventory = s.inventory;
+                    this.currentFloor = s.currentFloor;
+
+                    this.floors = s.floors;
+                    if (s.explored && s.explored.length === this.floors.length) {
+                        this.explored = s.explored;
+                    }
+                    this.completedNpcs = new Set(s.completedNpcs || []);
+                    if (s.activeShopItems) {
+                        this.Town.activeShopItems = s.activeShopItems;
+                    }
+
+                    document.getElementById('title-screen').style.display = 'none';
+                    document.getElementById('party-creation-screen').style.display = 'none';
+                    document.getElementById('gameover-screen').style.display = 'none';
+                    this.loadFloor(0, true, true);
+                    this.Town.goToTown();
+                    this.renderMinimap();
+                    this.Town.msg("Game loaded!");
+                    this.log("Progress restored.");
+                } catch (e) {
+                    alert("Load failed! Save may be corrupted.");
+                }
+            },
+
+            triggerVictory(text) {
+                this.state = "victory";
+                MusicEngine.stop();
+                document.getElementById('victory-text').innerText = text || "You have conquered the dungeon!";
+                document.getElementById('victory-screen').style.display = 'flex';
+            },
+
+            triggerGameOver() {
+                this.state = "gameover";
+                MusicEngine.stop();
+                document.getElementById('gameover-screen').style.display = 'flex';
+            },
+
+            replaceMember(index) {
+                if (this.state !== "town") return;
+                if (this.party[index].hp > 0) return;
+
+                // Build a simple class picker via prompt-style flow
+                let classIds = Object.keys(classDB);
+                if (classIds.length === 0) return;
+
+                let classListStr = classIds.map((id, i) => `${i + 1}. ${classDB[id].name} (HP:${classDB[id].baseHp} ATK:${classDB[id].baseAtk})`).join('\n');
+                let choice = prompt(`Choose a class for your new recruit:\n\n${classListStr}\n\nEnter number (1-${classIds.length}):`);
+                
+                if (choice === null) return;
+                let choiceIdx = parseInt(choice) - 1;
+                if (isNaN(choiceIdx) || choiceIdx < 0 || choiceIdx >= classIds.length) return alert("Invalid choice.");
+
+                let cls = classDB[classIds[choiceIdx]];
+                let customName = prompt(`Enter a name for your new ${cls.name}:`, "Recruit");
+                if (customName === null) return;
+                customName = customName.trim() || "Recruit";
+
+                // Return dead hero's weapon to inventory
+                let oldWeapon = this.party[index].weapon;
+                if (oldWeapon) {
+                    this.inventory.push(JSON.parse(JSON.stringify(oldWeapon)));
+                    this.log(`${oldWeapon.name} was recovered from the fallen hero.`);
+                }
+
+                this.party[index] = {
+                    name: customName,
+                    classId: cls.id,
+                    className: cls.name,
+                    level: 1,
+                    xp: 0,
+                    hp: cls.baseHp,
+                    maxHp: cls.baseHp,
+                    atk: cls.baseAtk,
+                    spellsLeft: cls.baseSpells,
+                    maxSpells: cls.baseSpells,
+                    weapon: null
+                };
+
+                this.log(`${customName} the ${cls.name} joins the party.`);
+                this.Town.goToTown();
+            },
+
+            Town: {
+                data: null,
+                activeShopItems: [],
+
+                init() {
+                    this.data = rawTownData || { name: "Oakhaven", shopkeeper: "Merchant", tavernCost: 10, churchCost: 50, shopItems: [] };
+                    this.activeShopItems = [...this.data.shopItems]; 
+                    document.getElementById('town-title').innerText = this.data.name;
+                    document.getElementById('shopkeeper-name').innerText = this.data.shopkeeper + "'s Shop";
+                    document.getElementById('btn-tavern').innerText = `Rest at Tavern (${this.data.tavernCost}G) — Restore HP & Spells`;
+                    document.getElementById('btn-church').innerText = `Visit Church (${this.data.churchCost}G) — Resurrect Fallen`;
+                },
+
+                msg(text) { document.getElementById('town-message').innerText = text; },
+
+                goToTown() {
+                    Game.state = "town";
+                    MusicEngine.playForState('town', Game.currentFloor);
+                    document.getElementById('party-creation-screen').style.display = 'none';
+                    document.getElementById('viewport').style.display = 'none';
+                    document.getElementById('controls-container').style.display = 'none';
+                    document.getElementById('town-screen').style.display = 'flex';
+                    this.closeShop();
+
+                    // Check for unrecoverable state: all dead, can't afford church, no classes to recruit
+                    let allDead = !Game.party.some(m => m.hp > 0);
+                    let cantAffordChurch = Game.gold < this.data.churchCost;
+                    let noClasses = Object.keys(classDB).length === 0;
+                    if (allDead && cantAffordChurch && noClasses) {
+                        Game.triggerGameOver();
+                        return;
+                    }
+                    
+                    let canLevel = false;
+                    Game.party.forEach(m => {
+                        let cls = classDB[m.classId];
+                        let nextLvl = cls ? cls.progression.find(p => p.level === m.level + 1) : null;
+                        if (nextLvl && m.xp >= nextLvl.xpReq) canLevel = true;
+                    });
+                    
+                    document.getElementById('btn-levelup').style.display = canLevel ? 'block' : 'none';
+                    
+                    // Contextual hints
+                    let deadCount = Game.party.filter(m => m.hp <= 0).length;
+                    if (canLevel && deadCount > 0) {
+                        this.msg("Level up available! You also have fallen heroes — visit the Church or click their name to replace them.");
+                    } else if (canLevel) {
+                        this.msg("Your heroes have enough experience to level up!");
+                    } else if (deadCount > 0) {
+                        this.msg(`${deadCount} hero${deadCount > 1 ? 'es' : ''} fallen. Visit the Church to resurrect, or replace them in the Party panel.`);
+                    } else {
+                        this.msg("You are safe in town.");
+                    }
+                    
+                    Game.updateUI();
+                },
+                
+                levelUp() {
+                    let leveledUpAnyone = false;
+                    Game.party.forEach(m => {
+                        let cls = classDB[m.classId];
+                        let nextLvl = cls ? cls.progression.find(p => p.level === m.level + 1) : null;
+                        
+                        if (nextLvl && m.xp >= nextLvl.xpReq) {
+                            m.level++;
+                            m.maxHp += nextLvl.hpGain;
+                            m.hp = m.maxHp; 
+                            m.atk += nextLvl.atkGain;
+                            m.maxSpells += nextLvl.spellGain;
+                            m.spellsLeft = m.maxSpells;
+                            leveledUpAnyone = true;
+                            this.msg(`${m.name} reached Level ${m.level}!`);
+                        }
+                    });
+                    
+                    if (leveledUpAnyone) {
+                        Game.updateUI();
+                        this.goToTown(); 
+                    }
+                },
+
+                enterDungeon() {
+                    if (!Game.party.some(m => m.hp > 0)) return this.msg("Your party is dead! Visit the Church or replace fallen heroes.");
+                    Game.state = "exploration";
+                    MusicEngine.playForState('exploration', Game.currentFloor);
+                    document.getElementById('town-screen').style.display = 'none';
+                    document.getElementById('viewport').style.display = 'block';
+                    document.getElementById('controls-container').style.display = 'flex';
+                    Game.log("You entered the dungeon.");
+                    Game.loadFloor(0, true); 
+                },
+
+                visitTavern() {
+                    let anyAlive = Game.party.some(m => m.hp > 0);
+                    if (!anyAlive) return this.msg("The tavern keeper refuses to serve corpses.");
+                    
+                    let needsHeal = Game.party.some(m => m.hp > 0 && (m.hp < m.maxHp || m.spellsLeft < m.maxSpells));
+                    if (!needsHeal) return this.msg("Your party is already fully rested.");
+                    
+                    if (Game.gold >= this.data.tavernCost) {
+                        Game.gold -= this.data.tavernCost;
+                        Game.party.forEach(m => {
+                            if (m.hp > 0) {
+                                m.hp = m.maxHp;
+                                m.spellsLeft = m.maxSpells;
+                            }
+                        });
+                        this.msg("You rested well. HP and Spells restored.");
+                        Game.updateUI();
+                    } else { this.msg("Not enough gold to rest!"); }
+                },
+
+                visitChurch() {
+                    let needsRevive = Game.party.some(m => m.hp <= 0);
+                    if (!needsRevive) return this.msg("You do not require the gods' healing right now.");
+                    
+                    if (Game.gold >= this.data.churchCost) {
+                        Game.gold -= this.data.churchCost;
+                        Game.party.forEach(m => {
+                            if (m.hp <= 0) m.hp = m.maxHp;
+                        });
+                        this.msg("The priest has revived your fallen heroes! Praise be.");
+                        Game.updateUI();
+                    } else { this.msg("The gods require more gold for a resurrection..."); }
+                },
+
+                openShop() {
+                    if (!Game.party.some(m => m.hp > 0)) return this.msg("Ghosts cannot trade.");
+                    document.getElementById('town-main-menu').style.display = 'none';
+                    document.getElementById('town-shop-menu').style.display = 'flex';
+                    this.renderShop();
+                    this.msg(`"${this.data.shopGreeting || 'Welcome to my shop. Have a look around.'}"`);
+                },
+
+                closeShop() {
+                    document.getElementById('town-main-menu').style.display = 'block';
+                    document.getElementById('town-shop-menu').style.display = 'none';
+                    this.msg("You leave the shop.");
+                },
+
+                renderShop() {
+                    const buyList = document.getElementById('shop-buy-list');
+                    const sellList = document.getElementById('shop-sell-list');
+                    buyList.innerHTML = ''; sellList.innerHTML = '';
+
+                    if (this.activeShopItems.length === 0) { buyList.innerHTML = "<em>Sold out!</em>"; } 
+                    else {
+                        this.activeShopItems.forEach((itemId, index) => {
+                            let item = itemDB[itemId];
+                            if(item) {
+                                buyList.innerHTML += `
+                                <div class="shop-row">
+                                    <span>${item.name} (${item.val}G)</span>
+                                    <button class="shop-buy-btn" onclick="Game.Town.buyItem(${index})">Buy</button>
+                                </div>`;
+                            }
+                        });
+                    }
+
+                    if (Game.inventory.length === 0 || Game.inventory.every(i => i.noSell)) { sellList.innerHTML = "<em>Nothing to sell.</em>"; } 
+                    else {
+                        Game.inventory.forEach((item, index) => {
+                            if (item.noSell) return;
+                            let sellPrice = Math.floor(item.val / 2) || 1; 
+                            sellList.innerHTML += `
+                            <div class="shop-row">
+                                <span>${item.name} (+${sellPrice}G)</span>
+                                <button class="shop-buy-btn" onclick="Game.Town.sellItem(${index})">Sell</button>
+                            </div>`;
+                        });
+                    }
+                },
+
+                buyItem(index) {
+                    let itemId = this.activeShopItems[index];
+                    let item = itemDB[itemId];
+                    if (Game.gold >= item.val) {
+                        Game.gold -= item.val;
+                        Game.inventory.push(JSON.parse(JSON.stringify(item))); 
+                        this.activeShopItems.splice(index, 1); 
+                        this.msg(`Bought ${item.name}!`);
+                        Game.updateUI();
+                        this.renderShop();
+                    } else { this.msg("You can't afford that!"); }
+                },
+
+                sellItem(index) {
+                    let item = Game.inventory[index];
+                    let sellPrice = Math.floor(item.val / 2) || 1;
+                    Game.gold += sellPrice;
+                    Game.inventory.splice(index, 1);
+                    this.msg(`Sold ${item.name} for ${sellPrice}G.`);
+                    Game.updateUI();
+                    this.renderShop();
+                }
+            },
+
+            setupInput() {
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.toLowerCase() === 'm') {
+                        this.minimapVisible = !this.minimapVisible;
+                        this.miniCanvas.style.display = this.minimapVisible ? 'block' : 'none';
+                        return;
+                    }
+                    if (e.key.toLowerCase() === 'n') {
+                        MusicEngine.toggle();
+                        this.log(MusicEngine.muted ? "Music off." : "Music on.");
+                        if (!MusicEngine.muted) MusicEngine.playForState(this.state, this.currentFloor);
+                        return;
+                    }
+                    if (this.state !== "exploration") return;
+                    
+                    let newX = this.player.x; let newY = this.player.y; let interacted = false; 
+                    this.lastPos = { x: this.player.x, y: this.player.y };
+                    
+                    const dir = this.player.dir; const key = e.key.toLowerCase();
+
+                    if (key === 'w') { if(dir===0) newY--; if(dir===1) newX++; if(dir===2) newY++; if(dir===3) newX--; }
+                    if (key === 's') { if(dir===0) newY++; if(dir===1) newX--; if(dir===2) newY--; if(dir===3) newX++; }
+                    if (key === 'a') { this.player.dir = (dir + 3) % 4; }
+                    if (key === 'd') { this.player.dir = (dir + 1) % 4; }
+                    
+                    if (key === 'e') {
+                        let tX = this.player.x; let tY = this.player.y;
+                        if(dir===0) tY--; if(dir===1) tX++; if(dir===2) tY++; if(dir===3) tX--;
+                        
+                        if (tY >= 0 && tY < 20 && tX >= 0 && tX < 20) {
+                            let targetTile = this.mapGrid[tY][tX];
+                            let keyStr = `${tX},${tY}`;
+
+                            if (targetTile === 2) { this.mapGrid[tY][tX] = 3; this.log("You open the door."); interacted = true; }
+                            else if (targetTile === 3) { this.mapGrid[tY][tX] = 2; this.log("You close the door."); interacted = true; }
+                            
+                            else if (targetTile === 10) {
+                                let reqKey = this.mapDoors[keyStr];
+                                if (!reqKey) {
+                                    this.mapGrid[tY][tX] = 3; 
+                                    this.log("You push the broken lock open.");
+                                } else {
+                                    let keyIndex = this.inventory.findIndex(i => i.id === reqKey);
+                                    let keyObj = itemDB[reqKey];
+                                    if (keyIndex > -1) {
+                                        this.mapGrid[tY][tX] = 3;
+                                        this.log(`You unlocked the door with the ${keyObj ? keyObj.name : 'key'}.`);
+                                        this.inventory.splice(keyIndex, 1); 
+                                        this.updateUI(); 
+                                    } else {
+                                        this.log(`It's locked. You need a ${keyObj ? keyObj.name : 'specific key'}.`);
+                                    }
+                                }
+                                interacted = true;
+                            }
+                            else if (targetTile === 8) {
+                                let chestData = this.mapChests[keyStr];
+                                if (chestData) {
+                                    let msg = "You opened the chest!";
+                                    if (chestData.gold > 0) {
+                                        this.gold += chestData.gold;
+                                        msg += ` Found ${chestData.gold}G.`;
+                                    }
+                                    if (chestData.item && itemDB[chestData.item]) {
+                                        let itemObj = itemDB[chestData.item];
+                                        this.inventory.push(JSON.parse(JSON.stringify(itemObj)));
+                                        msg += ` Found ${itemObj.name}!`;
+                                    }
+                                    if (!chestData.gold && !chestData.item) {
+                                        msg += " It was completely empty.";
+                                    }
+                                    this.log(msg);
+                                    this.mapGrid[tY][tX] = 0;
+                                    delete this.mapChests[keyStr];
+                                    this.updateUI();
+                                }
+                                interacted = true;
+                            }
+                            else if (targetTile === 11) {
+                                let npcId = this.mapNpcs[keyStr];
+                                let npcData = npcId ? npcDB[npcId] : null;
+                                if (npcData) {
+                                    let npcKey = `${this.currentFloor},${keyStr}`;
+                                    if (this.completedNpcs.has(npcKey)) {
+                                        this.log(`${npcData.name}: ${npcData.idleText || "..."}`);
+                                    } else if (!npcData.reqItem || npcData.reqItem === "") {
+                                        let msg = npcData.completeText || "Thank you.";
+                                        if (npcData.rewardGold > 0) {
+                                            this.gold += npcData.rewardGold;
+                                            msg += ` Received ${npcData.rewardGold}G.`;
+                                        }
+                                        if (npcData.rewardItem && itemDB[npcData.rewardItem]) {
+                                            let rItem = itemDB[npcData.rewardItem];
+                                            this.inventory.push(JSON.parse(JSON.stringify(rItem)));
+                                            msg += ` Received ${rItem.name}!`;
+                                        }
+                                        this.log(`${npcData.name}: ${msg}`);
+                                        this.completedNpcs.add(npcKey);
+                                        this.updateUI();
+                                    } else {
+                                        let reqIndex = this.inventory.findIndex(i => i.id === npcData.reqItem);
+                                        if (reqIndex > -1) {
+                                            let msg = npcData.completeText || "Thank you.";
+                                            if (npcData.rewardGold > 0) {
+                                                this.gold += npcData.rewardGold;
+                                                msg += ` Received ${npcData.rewardGold}G.`;
+                                            }
+                                            if (npcData.rewardItem && itemDB[npcData.rewardItem]) {
+                                                let rItem = itemDB[npcData.rewardItem];
+                                                this.inventory.push(JSON.parse(JSON.stringify(rItem)));
+                                                msg += ` Received ${rItem.name}!`;
+                                            }
+                                            this.log(`${npcData.name}: ${msg}`);
+                                            this.inventory.splice(reqIndex, 1); 
+                                            this.completedNpcs.add(npcKey);
+                                            this.updateUI();
+                                        } else {
+                                            this.log(`${npcData.name}: ${npcData.dialogue || "..."}`);
+                                        }
+                                    }
+                                }
+                                interacted = true;
+                            }
+                        }
+                    }
+
+                    let inBounds = newX >= 0 && newX < 20 && newY >= 0 && newY < 20;
+
+                    if (!interacted && inBounds && [0, 3, 4, 5, 12, 13].includes(this.mapGrid[newY][newX])) {
+                        this.player.x = newX; this.player.y = newY;
+                        if (this.mapGrid[newY][newX] === 4) this.pickupItem(newX, newY);
+                        if (this.mapGrid[newY][newX] === 5) this.startCombat(newX, newY);
+                        if (this.mapGrid[newY][newX] === 12) {
+                            let winKey = `${newX},${newY}`;
+                            let winMsg = this.mapWins[winKey] || "You win!";
+                            this.triggerVictory(winMsg);
+                            return;
+                        }
+                    }
+                    else if (!interacted && inBounds && this.mapGrid[newY][newX] === 6) {
+                        if (this.currentFloor === 0) {
+                            this.log("You return to the safety of town.");
+                            this.Town.goToTown();
+                        } else {
+                            this.log("You ascend the stairs.");
+                            this.loadFloor(this.currentFloor - 1, false);
+                        }
+                        return;
+                    }
+                    else if (!interacted && inBounds && this.mapGrid[newY][newX] === 7) {
+                        if (this.currentFloor + 1 < this.floors.length) {
+                            this.log("You descend deeper into the dungeon.");
+                            this.loadFloor(this.currentFloor + 1, true);
+                        } else {
+                            this.log("The path is blocked. You can go no deeper.");
+                        }
+                        return;
+                    }
+                    // Let monsters take their turn ONLY if we actually moved or interacted
+                    let playerMoved = (this.player.x !== this.lastPos.x || this.player.y !== this.lastPos.y);
+                    if (this.state === "exploration" && (playerMoved || interacted)) {
+                        this.processMonsterTurns();
+                    }
+
+                    this.render();
+                });
+            },
+
+            pickupItem(x, y) {
+                let key = `${x},${y}`;
+                if (this.mapItems[key] && itemDB[this.mapItems[key]]) {
+                    let item = itemDB[this.mapItems[key]];
+                    this.inventory.push(JSON.parse(JSON.stringify(item)));
+                    this.log(`Found a ${item.name}!`);
+                    this.mapGrid[y][x] = 0;
+                    delete this.mapItems[key];
+                    this.updateUI();
+                }
+            },
+
+            useItem(index) {
+                let item = this.inventory[index];
+                if (item.type === 'use') {
+                    let targets = this.party.filter(m => m.hp > 0 && m.hp < m.maxHp);
+                    if (targets.length === 0) {
+                        this.log(`No one needs healing right now.`);
+                        return;
+                    }
+                    if (targets.length === 1) {
+                        let target = targets[0];
+                        target.hp = Math.min(target.maxHp, target.hp + item.val);
+                        this.log(`Used ${item.name} on ${target.name}. Restored ${item.val} HP!`);
+                        this.inventory.splice(index, 1);
+                        this.updateUI();
+                        return;
+                    }
+                    let listStr = targets.map((m, i) => `${i + 1}. ${m.name} (HP: ${m.hp}/${m.maxHp})`).join('\n');
+                    let choice = prompt(`Use ${item.name} (+${item.val} HP) on who?\n\n${listStr}\n\nEnter number:`);
+                    if (choice === null) return;
+                    let pick = parseInt(choice) - 1;
+                    if (pick < 0 || pick >= targets.length) return this.log("Invalid choice.");
+                    let target = targets[pick];
+                    target.hp = Math.min(target.maxHp, target.hp + item.val);
+                    this.log(`Used ${item.name} on ${target.name}. Restored ${item.val} HP!`);
+                    this.inventory.splice(index, 1);
+                    this.updateUI();
+                } else if (item.type === 'weapon') {
+                    // Build hero picker
+                    let aliveHeroes = this.party.map((m, i) => m.hp > 0 ? i : -1).filter(i => i !== -1);
+                    if (aliveHeroes.length === 0) return this.log("No one alive to equip this.");
+                    
+                    let listStr = aliveHeroes.map(i => `${i + 1}. ${this.party[i].name} (${this.party[i].weapon ? this.party[i].weapon.name : 'No weapon'})`).join('\n');
+                    let choice = prompt(`Equip ${item.name} (ATK+${item.atkBonus || 0}) on who?\n\n${listStr}\n\nEnter number:`);
+                    
+                    if (choice === null) return;
+                    let heroIdx = parseInt(choice) - 1;
+                    if (!aliveHeroes.includes(heroIdx)) return this.log("Invalid choice.");
+                    
+                    let hero = this.party[heroIdx];
+                    
+                    // Unequip current weapon back to inventory
+                    if (hero.weapon) {
+                        this.inventory.push(JSON.parse(JSON.stringify(hero.weapon)));
+                        this.log(`${hero.name} unequipped ${hero.weapon.name}.`);
+                    }
+                    
+                    // Equip new weapon
+                    hero.weapon = JSON.parse(JSON.stringify(item));
+                    this.inventory.splice(index, 1);
+                    this.log(`${hero.name} equipped ${item.name}!`);
+                    this.updateUI();
+                } else if (item.type === 'town') {
+                    if (this.state !== 'exploration') {
+                        this.log(`You can only use ${item.name} while exploring the dungeon.`);
+                        return;
+                    }
+                    this.log(`You use the ${item.name}. The world shifts around you...`);
+                    this.inventory.splice(index, 1);
+                    this.Town.goToTown();
+                } else {
+                    this.log(`${item.name} cannot be used here.`);
+                }
+            },
+
+            startCombat(x, y) {
+                let monId = this.mapMonsters[`${x},${y}`];
+                if (!monId || !monsterDB[monId]) return;
+                
+                this.combat.currentEnemy = JSON.parse(JSON.stringify(monsterDB[monId]));
+                this.combat.enemyCoords = {x: x, y: y};
+                this.state = "combat";
+                MusicEngine.playForState('combat', this.currentFloor);
+                
+                this.combat.turnIndex = 0;
+                this.combat.defending = [false, false, false];
+                
+                document.getElementById('exploration-menu').style.display = "none";
+                document.getElementById('combat-menu').style.display = "flex";
+                
+                this.log(`A wild ${this.combat.currentEnemy.name} attacks!`);
+                this.advanceToNextAliveHero(); 
+                this.render();
+            },
+
+            advanceToNextAliveHero() {
+                while (this.combat.turnIndex < 3) {
+                    if (this.party[this.combat.turnIndex].hp > 0) {
+                        this.updateUI(); 
+                        return; 
+                    }
+                    this.combat.turnIndex++;
+                }
+                
+                if (this.combat.turnIndex === 3) {
+                    this.enemyTurn();
+                }
+            },
+
+            combatAction(action) {
+                if (this.state !== "combat" || this.combat.turnIndex >= 3) return;
+                
+                let heroIdx = this.combat.turnIndex;
+                let activeHero = this.party[heroIdx];
+                let enemy = this.combat.currentEnemy;
+
+                this.combat.defending[heroIdx] = false; 
+
+                if (action === 'attack') {
+                    let weaponBonus = activeHero.weapon ? (activeHero.weapon.atkBonus || 0) : 0;
+                    let totalAtk = activeHero.atk + weaponBonus;
+                    let dmg = Math.floor(Math.random() * totalAtk) + 1;
+                    enemy.hp -= dmg; 
+                    this.log(`${activeHero.name} strikes the ${enemy.name} for ${dmg}!`);
+                
+                } else if (action === 'defend') {
+                    this.combat.defending[heroIdx] = true; 
+                    this.log(`${activeHero.name} braces for impact.`);
+                
+                } else if (action === 'spell') {
+                    let cls = classDB[activeHero.classId];
+                    let knownSpells = cls ? cls.spellList.filter(s => s.level <= activeHero.level).map(s => spellDB[s.spellId]).filter(s => s) : [];
+                    
+                    if (activeHero.spellsLeft <= 0) return this.log(`${activeHero.name} is out of spells!`);
+                    if (knownSpells.length === 0) return this.log(`${activeHero.name} knows no magic.`);
+
+                    // Pick spell
+                    let spell = knownSpells[0];
+                    if (knownSpells.length > 1) {
+                        let listStr = knownSpells.map((s, i) => `${i + 1}. ${s.name} (${s.type === 'heal' ? 'Heal ' + s.val + ' HP' : 'Dmg ' + s.val})`).join('\n');
+                        let choice = prompt(`${activeHero.name}'s Spells (${activeHero.spellsLeft} left):\n\n${listStr}\n\nEnter number:`);
+                        if (choice === null) return;
+                        let pick = parseInt(choice) - 1;
+                        if (pick < 0 || pick >= knownSpells.length) return this.log("Invalid choice.");
+                        spell = knownSpells[pick];
+                    }
+
+                    if (spell.type === 'heal') {
+                        let healTargets = this.party.filter(m => m.hp > 0 && m.hp < m.maxHp);
+                        if (healTargets.length === 0) {
+                            this.log(`${activeHero.name} casts ${spell.name}, but the party is fully healed!`);
+                        } else {
+                            let target = healTargets[0];
+                            if (healTargets.length > 1) {
+                                let listStr = healTargets.map((m, i) => `${i + 1}. ${m.name} (HP: ${m.hp}/${m.maxHp})`).join('\n');
+                                let choice = prompt(`Cast ${spell.name} (+${spell.val} HP) on who?\n\n${listStr}\n\nEnter number:`);
+                                if (choice === null) return;
+                                let pick = parseInt(choice) - 1;
+                                if (pick < 0 || pick >= healTargets.length) return this.log("Invalid choice.");
+                                target = healTargets[pick];
+                            }
+                            target.hp = Math.min(target.maxHp, target.hp + spell.val);
+                            this.log(`${activeHero.name} casts ${spell.name}! ${target.name} heals for ${spell.val} HP.`);
+                        }
+                    } else {
+                        let weaponBonus = activeHero.weapon ? (activeHero.weapon.atkBonus || 0) : 0;
+                        let dmg = spell.val + Math.floor(Math.random() * 4) + Math.floor((activeHero.atk + weaponBonus) / 2);
+                        enemy.hp -= dmg;
+                        this.log(`${activeHero.name} casts ${spell.name}! ${enemy.name} takes ${dmg} dmg.`);
+                    }
+
+                    activeHero.spellsLeft--;
+                
+                } else if (action === 'run') {
+                    if (Math.random() > 0.4) { 
+                        this.log("The party ran away!"); 
+                        return this.endCombat(false); 
+                    } else { 
+                        this.log("Escape blocked!"); 
+                    }
+                }
+
+                this.updateUI();
+                this.render();
+
+                if (enemy.hp <= 0) {
+                    return this.processCombatWin();
+                }
+
+                this.combat.turnIndex++;
+                this.advanceToNextAliveHero();
+            },
+
+            enemyTurn() {
+                let enemy = this.combat.currentEnemy;
+                
+                let aliveHeroes = this.party.map((m, idx) => m.hp > 0 ? idx : -1).filter(idx => idx !== -1);
+                if (aliveHeroes.length === 0) return; 
+
+                setTimeout(() => {
+                    if (this.state !== "combat") return;
+                    
+                    let targetIdx = aliveHeroes[Math.floor(Math.random() * aliveHeroes.length)];
+                    let target = this.party[targetIdx];
+                    let eDmg = Math.floor(Math.random() * enemy.atk) + 1;
+                    
+                    if (this.combat.defending[targetIdx]) {
+                        eDmg = Math.floor(eDmg / 2); 
+                        this.log(`Blocked! ${enemy.name} hits ${target.name} for ${eDmg}.`);
+                    } else { 
+                        this.log(`${enemy.name} attacks ${target.name} for ${eDmg}!`); 
+                    }
+                    
+                    target.hp -= eDmg;
+                    if (target.hp < 0) target.hp = 0;
+                    
+                    this.updateUI();
+                    
+                    if (!this.party.some(m => m.hp > 0)) {
+                        this.log("PARTY WIPED. You were dragged back to town.");
+                        document.getElementById('combat-menu').style.display = "none";
+                        document.getElementById('exploration-menu').style.display = "block";
+                        this.Town.goToTown();
+                    } else {
+                        this.combat.turnIndex = 0;
+                        this.advanceToNextAliveHero();
+                        this.render(); 
+                    }
+                }, 800);
+            },
+
+            processCombatWin() {
+                let enemy = this.combat.currentEnemy;
+                let goldDrop = enemy.gold || 0;
+                let xpGained = enemy.xp || 0;
+
+                this.party.forEach(m => {
+                    if (m.hp > 0) {
+                        let cls = classDB[m.classId];
+                        let nextLvl = cls ? cls.progression.find(p => p.level === m.level + 1) : null;
+                        if (nextLvl) {
+                            m.xp += xpGained;
+                            if (m.xp > nextLvl.xpReq) m.xp = nextLvl.xpReq; 
+                        }
+                    }
+                });
+
+                this.log(`Defeated ${enemy.name}! Gained ${xpGained} XP and ${goldDrop}G.`);
+                this.gold += goldDrop;
+                
+                if (enemy.dropItem && itemDB[enemy.dropItem] && Math.random() <= (enemy.dropRate || 0.3)) {
+                    let dropped = itemDB[enemy.dropItem];
+                    this.inventory.push(JSON.parse(JSON.stringify(dropped)));
+                    this.log(`Dropped a ${dropped.name}!`);
+                }
+                
+                this.updateUI();
+                this.endCombat(true);
+                
+                if (enemy.isBoss) {
+                    this.triggerVictory(enemy.winText || `You defeated ${enemy.name} and saved the realm!`);
+                }
+            },
+
+            endCombat(monsterDied) {
+                this.state = "exploration";
+                MusicEngine.playForState('exploration', this.currentFloor);
+                document.getElementById('combat-menu').style.display = "none";
+                document.getElementById('exploration-menu').style.display = "block";
+                let spellBtn = document.getElementById('btn-combat-spell');
+                if (spellBtn) { spellBtn.innerText = 'Spell'; spellBtn.title = ''; spellBtn.disabled = false; spellBtn.style.opacity = '1'; }
+                
+                if (monsterDied) {
+                    this.mapGrid[this.combat.enemyCoords.y][this.combat.enemyCoords.x] = 0;
+                    delete this.mapMonsters[`${this.combat.enemyCoords.x},${this.combat.enemyCoords.y}`];
+                }
+                else { this.player.x = this.lastPos.x; this.player.y = this.lastPos.y; }
+                
+                this.combat.currentEnemy = null;
+                this.render();
+            },
+
+            processMonsterTurns() {
+                if (!this.mapMonsters) return;
+                let newMonsters = {};
+                let combatTriggered = false;
+
+                for (let key in this.mapMonsters) {
+                    let [strX, strY] = key.split(',');
+                    let mx = parseInt(strX), my = parseInt(strY);
+                    let monId = this.mapMonsters[key];
+
+                    // If a previous monster already started combat this turn, freeze the rest
+                    if (combatTriggered) {
+                        newMonsters[key] = monId;
+                        continue; 
+                    }
+
+                    let dx = this.player.x - mx;
+                    let dy = this.player.y - my;
+                    let dist = Math.max(Math.abs(dx), Math.abs(dy)); 
+
+                    // If player is within 2 tiles (horizontally, vertically, or diagonally)
+                    if (dist > 0 && dist <= 2) {
+                        // Move towards player on the axis where they are furthest
+                        let stepX = 0, stepY = 0;
+                        if (Math.abs(dx) > Math.abs(dy)) stepX = Math.sign(dx);
+                        else stepY = Math.sign(dy);
+
+                        let nextX = mx + stepX;
+                        let nextY = my + stepY;
+
+                        // Did the monster bump into the player? Ambush!
+                        if (nextX === this.player.x && nextY === this.player.y) {
+                            newMonsters[`${mx},${my}`] = monId; // Stay in place for the fight
+                            this.startCombat(mx, my);
+                            combatTriggered = true;
+                        } 
+                        // Otherwise, check if the next tile is an empty floor (0) or open door (3)
+                        else if ([0, 3].includes(this.mapGrid[nextY][nextX]) && !newMonsters[`${nextX},${nextY}`] && !this.mapMonsters[`${nextX},${nextY}`]) {
+                            this.mapGrid[my][mx] = 0;        // Clear old grid tile
+                            this.mapGrid[nextY][nextX] = 5;  // Set new grid tile to monster (5)
+                            newMonsters[`${nextX},${nextY}`] = monId; // Update dictionary
+                        } 
+                        else {
+                            // Path blocked, stay put
+                            newMonsters[key] = monId; 
+                        }
+                    } else {
+                        // Out of range, stay put
+                        newMonsters[key] = monId; 
+                    }
+                }
+                
+                // Update monster position map
+                this.mapMonsters = newMonsters;
+                
+                // Ensure the map data persists if we leave the floor and come back
+                this.floors[this.currentFloor].placements.monsters = newMonsters;
+            },
+
+            // --- RENDERING ---
+            isWallType(t) { return [1, 2, 10, 13].includes(t); },
+
+            drawItem(bx, by, bw, bh) {
+                let cx = bx + bw / 2; let cy = by + bh * 0.7;
+                let sw = bw * 0.12; let sh = bw * 0.15;
+                let ctx = this.ctx;
+                ctx.fillStyle = "#fdfcf0"; ctx.strokeStyle = "#2a2420"; ctx.lineWidth = 2;
+                // Sack body
+                ctx.beginPath();
+                ctx.moveTo(cx - sw, cy - sh * 0.2);
+                ctx.quadraticCurveTo(cx - sw * 1.2, cy + sh, cx, cy + sh);
+                ctx.quadraticCurveTo(cx + sw * 1.2, cy + sh, cx + sw, cy - sh * 0.2);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+                // Tied top
+                ctx.beginPath();
+                ctx.moveTo(cx - sw * 0.4, cy - sh * 0.2);
+                ctx.lineTo(cx, cy - sh * 0.7);
+                ctx.lineTo(cx + sw * 0.4, cy - sh * 0.2);
+                ctx.stroke();
+                // Little knot
+                ctx.beginPath();
+                ctx.arc(cx, cy - sh * 0.55, sw * 0.2, 0, Math.PI * 2);
+                ctx.stroke();
+            },
+
+            drawStairsUp(bx, by, bw, bh) {
+                let cx = bx + bw / 2; let w = bw * 0.75; let h = bh * 0.5;
+                this.ctx.fillStyle = "#fdfcf0"; this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2;
+                for (let i = 0; i < 3; i++) {
+                    let stepW = w * (1 - i * 0.15); 
+                    let stepY = (by + bh * 0.95) - (i * (h / 3)); 
+                    let stepH = h / 3;
+                    this.ctx.fillRect(cx - stepW / 2, stepY - stepH, stepW, stepH);
+                    this.ctx.strokeRect(cx - stepW / 2, stepY - stepH, stepW, stepH);
+                }
+            },
+
+            drawStairsDown(bx, by, bw, bh) {
+                let cx = bx + bw / 2; let cy = by + bh * 0.9; let w = bw * 0.75; let h = bh * 0.2;
+                this.ctx.fillStyle = "#111"; this.ctx.strokeStyle = "#fdfcf0"; this.ctx.lineWidth = 2;
+                this.ctx.beginPath(); this.ctx.moveTo(cx - w/2, cy - h/2); this.ctx.lineTo(cx + w/2, cy - h/2);
+                this.ctx.lineTo(cx + w/2 * 1.2, cy + h/2); this.ctx.lineTo(cx - w/2 * 1.2, cy + h/2); this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.beginPath(); this.ctx.moveTo(cx - w/2.1, cy); this.ctx.lineTo(cx + w/2.1, cy); this.ctx.stroke();
+            },
+
+            drawWin(bx, by, bw, bh) {
+                let cx = bx + bw / 2; let cy = by + bh * 0.5; let r = bw * 0.2;
+                this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2;
+                this.ctx.beginPath(); this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                this.ctx.moveTo(cx, cy - r); this.ctx.lineTo(cx, cy + r);
+                this.ctx.moveTo(cx - r, cy); this.ctx.lineTo(cx + r, cy); this.ctx.stroke();
+                this.ctx.beginPath(); this.ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); this.ctx.stroke();
+            },
+
+            drawSpriteInRect(sprite, bx, by, bw, bh) {
+                if (!sprite) return;
+                let size = Math.min(bw, bh) * 0.8;
+                let pxSize = size / 16;
+                if (pxSize < 0.5) return; 
+                let oX = bx + (bw - size) / 2;
+                let oY = by + (bh - size) / 2;
+                this.ctx.fillStyle = "#111";
+                for (let r = 0; r < 16; r++) {
+                    for (let c = 0; c < 16; c++) {
+                        if (sprite[r] && sprite[r][c] === 1) {
+                            this.ctx.fillRect(oX + c * pxSize, oY + r * pxSize, pxSize, pxSize);
+                        }
+                    }
+                }
+            },
+
+            drawChestSprite(bx, by, bw, bh) {
+                let cx = bx + bw / 2;
+                let cy = by + bh * 0.95; 
+                let cW = bw * 0.8;
+                let cH = bh * 0.6;
+                let cX = cx - cW / 2;
+                let cY = cy - cH;
+
+                this.ctx.globalAlpha = 1.0;
+                this.ctx.fillStyle = "#fdfcf0";
+                this.ctx.fillRect(cX, cY, cW, cH);
+                this.ctx.strokeStyle = "#111";
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(cX, cY, cW, cH);
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(cX, cY + cH * 0.3);
+                this.ctx.lineTo(cX + cW, cY + cH * 0.3);
+                this.ctx.stroke();
+
+                let claspSize = Math.max(2, cH * 0.1);
+                this.ctx.fillStyle = "#111";
+                this.ctx.fillRect(cx - claspSize, cY + cH * 0.3 - claspSize, claspSize * 2, claspSize * 2);
+            },
+
+            drawMonster() {
+                const ctx = this.ctx;
+                const W = 400, H = 400;
+                let enemy = this.combat.currentEnemy;
+
+                // Parchment background
+                ctx.fillStyle = "#fdfcf0";
+                ctx.fillRect(0, 0, W, H);
+
+                // Vignette - darker edges
+                let vg = ctx.createRadialGradient(200, 200, 80, 200, 200, 280);
+                vg.addColorStop(0, "rgba(26, 22, 18, 0.0)");
+                vg.addColorStop(1, "rgba(26, 22, 18, 0.12)");
+                ctx.fillStyle = vg;
+                ctx.fillRect(0, 0, W, H);
+
+                // Crosshatch atmosphere - sparse ink strokes in corners
+                ctx.strokeStyle = "rgba(26, 22, 18, 0.06)";
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 30; i++) {
+                    let seed = (i * 37 + 11) % 200;
+                    let x1, y1;
+                    // Cluster in corners
+                    if (i < 8) { x1 = seed % 80; y1 = seed % 80; }
+                    else if (i < 16) { x1 = W - (seed % 80); y1 = seed % 80; }
+                    else if (i < 24) { x1 = seed % 80; y1 = H - (seed % 80); }
+                    else { x1 = W - (seed % 80); y1 = H - (seed % 80); }
+                    let len = 15 + (seed % 20);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x1 + len * 0.7, y1 + len);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x1 + 5, y1);
+                    ctx.lineTo(x1 + 5 - len * 0.3, y1 + len * 0.8);
+                    ctx.stroke();
+                }
+
+                // Ink border frame
+                ctx.strokeStyle = "#2a2420";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(8, 8, W - 16, H - 16);
+                ctx.lineWidth = 1;
+                ctx.strokeRect(12, 12, W - 24, H - 24);
+
+                if (!enemy) return;
+
+                // Draw monster sprite - centered
+                if (enemy.sprite) {
+                    const pSize = 15;
+                    const oX = 200 - (8 * pSize);
+                    const oY = 170 - (8 * pSize);
+                    ctx.fillStyle = "#1a1612";
+                    for (let r = 0; r < 16; r++) {
+                        for (let c = 0; c < 16; c++) {
+                            if (enemy.sprite[r][c] === 1) ctx.fillRect(oX + (c * pSize), oY + (r * pSize), pSize, pSize);
+                        }
+                    }
+                }
+
+                // Enemy name - centered, hand-drawn underline
+                ctx.fillStyle = "#2a2420";
+                ctx.font = "bold 18px monospace";
+                ctx.textAlign = "center";
+                ctx.fillText(enemy.name, 200, 320);
+                ctx.strokeStyle = "#2a2420";
+                ctx.lineWidth = 1;
+                let nameW = ctx.measureText(enemy.name).width;
+                ctx.beginPath();
+                ctx.moveTo(200 - nameW / 2, 324);
+                ctx.lineTo(200 + nameW / 2, 324);
+                ctx.stroke();
+
+                // HP bar
+                let barW = 200, barH = 14, barX = 100, barY = 338;
+                let hpRatio = Math.max(0, enemy.hp / enemy.maxHp);
+
+                // Bar background
+                ctx.fillStyle = "#e0dcd4";
+                ctx.fillRect(barX, barY, barW, barH);
+
+                // HP fill - color shifts red to green
+                let r = Math.floor(200 * (1 - hpRatio));
+                let g = Math.floor(160 * hpRatio);
+                ctx.fillStyle = `rgb(${r}, ${g}, 40)`;
+                ctx.fillRect(barX, barY, barW * hpRatio, barH);
+
+                // Bar border
+                ctx.strokeStyle = "#2a2420";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(barX, barY, barW, barH);
+
+                // HP text
+                ctx.fillStyle = "#2a2420";
+                ctx.font = "12px monospace";
+                ctx.fillText(`${enemy.hp} / ${enemy.maxHp}`, 200, barY + 12);
+
+                ctx.textAlign = "start"; // Reset
+            },
+
+            renderMinimap() {
+                if (!this.mapGrid || !this.minimapVisible) return;
+                this.miniCtx.fillStyle = "#fdfcf0"; this.miniCtx.fillRect(0, 0, 200, 200); const tSize = 10;
+                let exp = this.explored[this.currentFloor];
+                for(let y=0; y<20; y++) {
+                    for(let x=0; x<20; x++) {
+                        if(exp && exp[y][x]) {
+                            let tile = this.mapGrid[y][x];
+                            if(tile === 1 || tile === 13) { this.miniCtx.fillStyle = "#222"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
+                            else if(tile === 0 || tile === 3) { 
+                                this.miniCtx.strokeStyle = "#ccc"; this.miniCtx.strokeRect(x*tSize, y*tSize, tSize, tSize); 
+                                if(tile === 3) { this.miniCtx.strokeStyle = "#3a7ca5"; this.miniCtx.strokeRect(x*tSize+1, y*tSize+1, tSize-2, tSize-2); }
+                            }
+                            else if(tile === 2) { this.miniCtx.fillStyle = "#3a7ca5"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
+                            else if(tile === 4) { this.miniCtx.fillStyle = "#fbc02d"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 5) { this.miniCtx.fillStyle = "#8b0000"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 6) { this.miniCtx.fillStyle = "#9c27b0"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 7) { this.miniCtx.fillStyle = "#673ab7"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 8) { this.miniCtx.fillStyle = "#ff9800"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 10) { this.miniCtx.fillStyle = "#006064"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
+                            else if(tile === 11) { this.miniCtx.fillStyle = "#2e7d32"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 12) { this.miniCtx.fillStyle = "#ffd700"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                        }
+                    }
+                }
+                this.miniCtx.fillStyle = "#8b0000"; this.miniCtx.beginPath(); 
+                let cx = (this.player.x * tSize) + (tSize/2); let cy = (this.player.y * tSize) + (tSize/2);
+                if(this.player.dir===0) { this.miniCtx.moveTo(cx, cy-4); this.miniCtx.lineTo(cx+4, cy+4); this.miniCtx.lineTo(cx-4, cy+4); }
+                else if(this.player.dir===1) { this.miniCtx.moveTo(cx+4, cy); this.miniCtx.lineTo(cx-4, cy-4); this.miniCtx.lineTo(cx-4, cy+4); }
+                else if(this.player.dir===2) { this.miniCtx.moveTo(cx, cy+4); this.miniCtx.lineTo(cx+4, cy-4); this.miniCtx.lineTo(cx-4, cy-4); }
+                else if(this.player.dir===3) { this.miniCtx.moveTo(cx-4, cy); this.miniCtx.lineTo(cx+4, cy-4); this.miniCtx.lineTo(cx+4, cy+4); }
+                this.miniCtx.fill();
+            },
+
+            drawSurfaceTexture() {
+                const ctx = this.ctx;
+                const W = 400, HALF = 200;
+                let seed = (this.player.x * 7 + this.player.y * 13 + this.player.dir * 3) % 100;
+                
+                // Vanishing point
+                let vpX = W / 2;
+                let vpY = HALF;
+                
+                ctx.strokeStyle = "#1a1612";
+                ctx.lineWidth = 1;
+
+                // --- FLOOR STONEWORK ---
+                // Horizontal mortar joints - quadratic compression towards horizon
+                let floorRows = 8;
+                let floorYs = [];
+                for (let i = 0; i <= floorRows; i++) {
+                    let t = i / floorRows;
+                    // Quadratic: bunches up near horizon
+                    let y = HALF + t * t * (HALF - 5);
+                    // Slight irregularity per row
+                    let wobble = ((seed + i * 17) % 5) - 2;
+                    floorYs.push(y + wobble * 0.5);
+                }
+
+                // Draw horizontal floor joints
+                ctx.globalAlpha = 0.16;
+                for (let i = 1; i < floorYs.length; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, floorYs[i]);
+                    ctx.lineTo(W, floorYs[i]);
+                    ctx.stroke();
+                }
+
+                // Vertical mortar joints converging to vanishing point — staggered per row
+                let stonesPerRow = 5;
+                for (let row = 0; row < floorRows; row++) {
+                    let yTop = floorYs[row];
+                    let yBot = floorYs[row + 1];
+                    let rowHeight = yBot - yTop;
+                    
+                    // Skip tiny rows near horizon
+                    if (rowHeight < 3) continue;
+                    
+                    // Fade opacity: faint near horizon, stronger near player
+                    let rowAlpha = 0.07 + (row / floorRows) * 0.11;
+                    ctx.globalAlpha = rowAlpha;
+                    
+                    // Stagger: offset every other row by half a stone width
+                    let offset = (row % 2 === 0) ? 0 : 0.5;
+                    
+                    for (let s = 1; s < stonesPerRow; s++) {
+                        let frac = (s / stonesPerRow) + offset / stonesPerRow;
+                        if (frac >= 1) frac -= 1;
+                        if (frac <= 0.01 || frac >= 0.99) continue;
+                        
+                        // Irregularity: shift each joint slightly
+                        let jitter = ((seed + row * 31 + s * 47) % 9 - 4) * 0.015;
+                        frac += jitter;
+                        
+                        // Top point: interpolate between edge and vanishing point
+                        let topDistFromHorizon = yTop - vpY;
+                        let topScale = topDistFromHorizon / (HALF);
+                        let topX = vpX + (frac - 0.5) * W * Math.max(0.2, topScale);
+                        
+                        // Bottom point: wider perspective
+                        let botDistFromHorizon = yBot - vpY;
+                        let botScale = botDistFromHorizon / (HALF);
+                        let botX = vpX + (frac - 0.5) * W * Math.max(0.2, botScale);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(topX, yTop);
+                        ctx.lineTo(botX, yBot);
+                        ctx.stroke();
+                    }
+                }
+
+                // Floor cracks - short irregular lines
+                ctx.globalAlpha = 0.05;
+                for (let i = 0; i < 5; i++) {
+                    let x = ((seed + i * 97) * 53) % W;
+                    let yStart = HALF + 50 + ((seed + i * 31) % 120);
+                    let len = 12 + ((seed + i * 43) % 25);
+                    if (yStart + len > 395) continue;
+                    ctx.beginPath();
+                    ctx.moveTo(x, yStart);
+                    // Jagged crack: 2-3 segments
+                    let cx1 = x + ((seed + i * 7) % 7) - 3;
+                    let cy1 = yStart + len * 0.4;
+                    let cx2 = x + ((seed + i * 13) % 9) - 4;
+                    ctx.lineTo(cx1, cy1);
+                    ctx.lineTo(cx2, yStart + len);
+                    ctx.stroke();
+                }
+
+                // --- CEILING STONEWORK (subtler, same structure) ---
+                let ceilRows = 6;
+                let ceilYs = [];
+                for (let i = 0; i <= ceilRows; i++) {
+                    let t = i / ceilRows;
+                    let y = HALF - t * t * (HALF - 5);
+                    let wobble = ((seed + i * 23) % 5) - 2;
+                    ceilYs.push(y + wobble * 0.4);
+                }
+
+                // Horizontal ceiling joints
+                ctx.globalAlpha = 0.11;
+                for (let i = 1; i < ceilYs.length; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, ceilYs[i]);
+                    ctx.lineTo(W, ceilYs[i]);
+                    ctx.stroke();
+                }
+
+                // Vertical ceiling joints — converging, staggered
+                let ceilStones = 4;
+                for (let row = 0; row < ceilRows; row++) {
+                    let yBot = ceilYs[row];  // closer to horizon
+                    let yTop = ceilYs[row + 1]; // further from horizon (towards top)
+                    let rowHeight = Math.abs(yBot - yTop);
+                    
+                    if (rowHeight < 3) continue;
+                    
+                    let rowAlpha = 0.05 + (row / ceilRows) * 0.08;
+                    ctx.globalAlpha = rowAlpha;
+                    
+                    let offset = (row % 2 === 0) ? 0 : 0.5;
+                    
+                    for (let s = 1; s < ceilStones; s++) {
+                        let frac = (s / ceilStones) + offset / ceilStones;
+                        if (frac >= 1) frac -= 1;
+                        if (frac <= 0.01 || frac >= 0.99) continue;
+                        
+                        let jitter = ((seed + row * 37 + s * 53) % 7 - 3) * 0.015;
+                        frac += jitter;
+                        
+                        let botDist = Math.abs(yBot - vpY) / HALF;
+                        let botX = vpX + (frac - 0.5) * W * Math.max(0.2, botDist);
+                        
+                        let topDist = Math.abs(yTop - vpY) / HALF;
+                        let topX = vpX + (frac - 0.5) * W * Math.max(0.2, topDist);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(botX, yBot);
+                        ctx.lineTo(topX, yTop);
+                        ctx.stroke();
+                    }
+                }
+
+                // Ceiling cracks
+                ctx.globalAlpha = 0.04;
+                for (let i = 0; i < 3; i++) {
+                    let x = ((seed + i * 67) * 41) % W;
+                    let yStart = 15 + ((seed + i * 29) % 70);
+                    let len = 10 + ((seed + i * 19) % 20);
+                    if (yStart + len > HALF - 15) continue;
+                    ctx.beginPath();
+                    ctx.moveTo(x, yStart);
+                    ctx.lineTo(x + ((seed + i * 11) % 7) - 3, yStart + len * 0.5);
+                    ctx.lineTo(x + ((seed + i * 17) % 5) - 2, yStart + len);
+                    ctx.stroke();
+                }
+
+                // Scattered floor dust specks
+                ctx.fillStyle = "#1a1612";
+                ctx.globalAlpha = 0.04;
+                for (let i = 0; i < 20; i++) {
+                    let px = ((seed + i * 73) * 37) % W;
+                    let py = HALF + 20 + ((seed + i * 51) * 29) % (HALF - 30);
+                    ctx.fillRect(px, py, 1, 1);
+                }
+
+                ctx.globalAlpha = 1.0;
+            },
+
+            render() {
+                if (this.state === "combat") return this.drawMonster();
+                if (this.state === "town" || this.state === "party_creation") return; 
+                
+                let exp = this.explored[this.currentFloor];
+                const plX = this.player.x, plY = this.player.y;
+                if(exp) exp[plY][plX] = true;
+                for(let y=-3; y<=3; y++) {
+                    for(let x=-3; x<=3; x++) {
+                        let ny = plY + y, nx = plX + x;
+                        if(ny<0 || ny>=20 || nx<0 || nx>=20 || !exp) continue;
+                        // Bresenham line-of-sight from player to target tile
+                        let x0 = plX, y0 = plY, x1 = nx, y1 = ny;
+                        let dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+                        let sx = x0<x1?1:-1, sy = y0<y1?1:-1;
+                        let err = dx-dy, blocked = false;
+                        while(true) {
+                            if(x0===x1 && y0===y1) break;
+                            // Check if current step is a wall (but not the starting tile)
+                            if((x0!==plX||y0!==plY)) {
+                                let t = this.mapGrid[y0][x0];
+                                if(t===1||t===13) { exp[y0][x0]=true; blocked=true; break; }
+                            }
+                            let e2=2*err;
+                            if(e2>-dy){err-=dy;x0+=sx;}
+                            if(e2<dx){err+=dx;y0+=sy;}
+                        }
+                        if(!blocked) exp[ny][nx] = true;
+                    }
+                }
+
+                const W = 400, H = 400, HALF = 200;
+                const ctx = this.ctx;
+                ctx.fillStyle = "#fdfcf0"; 
+                ctx.fillRect(0, 0, W, H);
+
+                // Ceiling: subtle darkening towards horizon
+                let ceilGrad = ctx.createLinearGradient(0, 0, 0, HALF);
+                ceilGrad.addColorStop(0, "rgba(26, 22, 18, 0.0)");
+                ceilGrad.addColorStop(1, "rgba(26, 22, 18, 0.06)");
+                ctx.fillStyle = ceilGrad;
+                ctx.fillRect(0, 0, W, HALF);
+
+                // Floor: subtle darkening towards horizon
+                let floorGrad = ctx.createLinearGradient(0, HALF, 0, H);
+                floorGrad.addColorStop(0, "rgba(26, 22, 18, 0.06)");
+                floorGrad.addColorStop(1, "rgba(26, 22, 18, 0.0)");
+                ctx.fillStyle = floorGrad;
+                ctx.fillRect(0, HALF, W, HALF);
+
+                this.drawSurfaceTexture();
+
+                // --- 1. DDA RAYCASTER CALCULATIONS ---
+                const dirAngles = [Math.PI * 1.5, 0, Math.PI * 0.5, Math.PI];
+                let playerAngle = dirAngles[this.player.dir];
+                let px = this.player.x + 0.5;
+                let py = this.player.y + 0.5;
+                
+                let FOV = Math.PI / 3;
+                let NUM_COLS = 400; 
+                let colWidth = W / NUM_COLS;
+                
+                let spriteSet = new Set();
+                let sprites = [];
+                let wallSlices = [];
+                let wallOverlays = {};
+                
+                for (let col = 0; col < NUM_COLS; col++) {
+                    let rayAngle = playerAngle - FOV / 2 + ((col + 0.5) / NUM_COLS) * FOV;
+                    let sinA = Math.sin(rayAngle);
+                    let cosA = Math.cos(rayAngle);
+                    
+                    let mapX = Math.floor(px);
+                    let mapY = Math.floor(py);
+                    
+                    let deltaDistX = Math.abs(1 / cosA) || 1e10;
+                    let deltaDistY = Math.abs(1 / sinA) || 1e10;
+                    
+                    let stepX, stepY, sideDistX, sideDistY;
+                    
+                    if (cosA > 0) { stepX = 1; sideDistX = (mapX + 1 - px) * deltaDistX; }
+                    else { stepX = -1; sideDistX = (px - mapX) * deltaDistX; }
+                    if (sinA > 0) { stepY = 1; sideDistY = (mapY + 1 - py) * deltaDistY; }
+                    else { stepY = -1; sideDistY = (py - mapY) * deltaDistY; }
+                    
+                    let hit = false;
+                    let side = 0;
+                    let hitTile = 1;
+                    
+                    for (let step = 0; step < 20; step++) {
+                        if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; } 
+                        else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+                        
+                        if (mapX < 0 || mapX >= 20 || mapY < 0 || mapY >= 20) { hitTile = 1; hit = true; break; }
+                        
+                        let tile = this.mapGrid[mapY][mapX];
+                        
+                        if (!hit && [4, 5, 6, 7, 8, 11, 12].includes(tile)) {
+                            let sprKey = `${mapX},${mapY}`;
+                            if (!spriteSet.has(sprKey)) {
+                                spriteSet.add(sprKey);
+                                sprites.push({ tile, mx: mapX, my: mapY });
+                            }
+                        }
+                        
+                        if (this.isWallType(tile)) { hitTile = tile; hit = true; break; }
+                    }
+                    
+                    let dist;
+                    if (side === 0) dist = (mapX - px + (1 - stepX) / 2) / cosA;
+                    else dist = (mapY - py + (1 - stepY) / 2) / sinA;
+                    dist = Math.abs(dist);
+                    if (dist < 0.01) dist = 0.01;
+                    
+                    let corrDist = dist * Math.cos(rayAngle - playerAngle);
+                    if (corrDist < 0.01) corrDist = 0.01;
+
+                    let wallX;
+                    if (side === 0) wallX = py + dist * sinA;
+                    else wallX = px + dist * cosA;
+                    wallX -= Math.floor(wallX);
+                    
+                    wallSlices.push({ col, dist: corrDist, rawDist: dist, tile: hitTile, side, mapX, mapY, wallX });
+
+                    if ([2, 10].includes(hitTile)) {
+                        let oKey = `${mapX},${mapY}`;
+                        if (!wallOverlays[oKey]) {
+                            wallOverlays[oKey] = { tile: hitTile, minCol: col, maxCol: col, dist: corrDist, side };
+                        } else {
+                            wallOverlays[oKey].minCol = Math.min(wallOverlays[oKey].minCol, col);
+                            wallOverlays[oKey].maxCol = Math.max(wallOverlays[oKey].maxCol, col);
+                        }
+                    }
+                }
+
+                // --- 2. DRAW WALL COLUMNS (Base & Bricks) ---
+                for (let c = 0; c < wallSlices.length; c++) {
+                    let s = wallSlices[c];
+                    let prevS = c > 0 ? wallSlices[c - 1] : null;
+
+                    let x = c * colWidth;
+                    let wh = Math.min(H, H / s.dist);
+                    let wt = HALF - wh / 2;
+                    let wb = HALF + wh / 2;
+
+                    let fadeAlpha = Math.max(0.02, Math.min(1.0, 2.5 / s.dist));
+                    let shadeAlpha = s.side === 1 ? fadeAlpha * 0.4 : fadeAlpha;
+
+                    // Solid Base Fill
+                    ctx.globalAlpha = 1.0;
+                    ctx.fillStyle = "#fdfcf0";
+                    ctx.fillRect(x - 0.5, wt, colWidth + 1.5, wh); 
+
+                    // Procedural Brickwork
+                    if (s.tile === 1) {
+                        ctx.globalAlpha = shadeAlpha;
+                        ctx.fillStyle = "#111";
+                        
+                        let numRows = 4;
+                        let bricksPerRow = 2;
+                        
+                        // Horizontal Mortars
+                        for (let row = 1; row < numRows; row++) {
+                            let y = wt + wh * (row / numRows);
+                            ctx.fillRect(x - 0.5, y - 0.5, colWidth + 1.5, 1.5);
+                        }
+                        
+                        // Vertical Mortars
+                        for (let row = 0; row < numRows; row++) {
+                            let offset = (row % 2 === 0) ? 0 : 0.5;
+                            let currBrick = Math.floor(s.wallX * bricksPerRow + offset);
+                            let prevBrick = prevS ? Math.floor(prevS.wallX * bricksPerRow + offset) : currBrick;
+                            
+                            let isTileBoundary = prevS && (prevS.mapX !== s.mapX || prevS.mapY !== s.mapY);
+                            
+                            if (!isTileBoundary && currBrick !== prevBrick) {
+                                let yT = wt + wh * (row / numRows);
+                                let yB = wt + wh * ((row + 1) / numRows);
+                                ctx.fillRect(x - 1, yT, 2, yB - yT);
+                            }
+                        }
+                    }
+
+                    // Illusionary Wall — wrong brick pattern: 3 rows, wider bricks, all same offset
+                    if (s.tile === 13) {
+                        ctx.globalAlpha = shadeAlpha;
+                        ctx.fillStyle = "#111";
+                        
+                        let numRows = 3;
+                        let bricksPerRow = 3;
+                        
+                        for (let row = 1; row < numRows; row++) {
+                            let y = wt + wh * (row / numRows);
+                            ctx.fillRect(x - 0.5, y - 0.5, colWidth + 1.5, 1.5);
+                        }
+                        
+                        // No staggering — all verticals line up (the tell)
+                        for (let row = 0; row < numRows; row++) {
+                            let currBrick = Math.floor(s.wallX * bricksPerRow);
+                            let prevBrick = prevS ? Math.floor(prevS.wallX * bricksPerRow) : currBrick;
+                            
+                            let isTileBoundary = prevS && (prevS.mapX !== s.mapX || prevS.mapY !== s.mapY);
+                            
+                            if (!isTileBoundary && currBrick !== prevBrick) {
+                                let yT = wt + wh * (row / numRows);
+                                let yB = wt + wh * ((row + 1) / numRows);
+                                ctx.fillRect(x - 1, yT, 2, yB - yT);
+                            }
+                        }
+                    }
+
+                    // Wall Seams (Grid Boundaries)
+                    if (prevS && (prevS.mapX !== s.mapX || prevS.mapY !== s.mapY)) {
+                        ctx.globalAlpha = fadeAlpha;
+                        ctx.fillStyle = "#111";
+                        ctx.fillRect(x - 1, wt, 2, wh);
+                    }
+
+                    // Top & Bottom Boundary Lines
+                    ctx.globalAlpha = fadeAlpha;
+                    ctx.fillStyle = "#111";
+                    ctx.fillRect(x - 0.5, wt - 1, colWidth + 1.5, 2);
+                    ctx.fillRect(x - 0.5, wb - 1, colWidth + 1.5, 2);
+                    
+                    if (prevS) {
+                        let prevWh = Math.min(H, H / prevS.dist);
+                        let prevWt = HALF - prevWh / 2;
+                        let prevWb = HALF + prevWh / 2;
+                        
+                        if (Math.abs(wt - prevWt) > 0.5) {
+                            let yMin = Math.min(wt, prevWt);
+                            let yMax = Math.max(wt, prevWt);
+                            ctx.fillRect(x - 1, yMin - 1, 2, yMax - yMin + 2);
+                        }
+                        if (Math.abs(wb - prevWb) > 0.5) {
+                            let yMin = Math.min(wb, prevWb);
+                            let yMax = Math.max(wb, prevWb);
+                            ctx.fillRect(x - 1, yMin - 1, 2, yMax - yMin + 2);
+                        }
+                    }
+                }
+
+                // --- 3. DOOR OVERLAYS ---
+                for (let oKey in wallOverlays) {
+                    let ov = wallOverlays[oKey];
+                    let minC = ov.minCol;
+                    let maxC = ov.maxCol;
+                    
+                    let midCol = Math.floor((minC + maxC) / 2);
+                    let sMid = wallSlices[midCol];
+                    let dist = sMid ? sMid.dist : ov.dist;
+                    let fadeAlpha = Math.max(0.02, Math.min(1.0, 2.5 / dist));
+                    
+                    ctx.globalAlpha = fadeAlpha;
+                    ctx.strokeStyle = "#111";
+                    ctx.fillStyle = "#111";
+                    ctx.lineWidth = 2;
+                    
+                    // Draw Border (tracing columns)
+                    ctx.beginPath();
+                    for (let c = minC; c <= maxC; c++) {
+                        let s = wallSlices[c];
+                        let wh = Math.min(H, H / s.dist);
+                        let wt = HALF - wh / 2;
+                        let x = c * colWidth;
+                        if (c === minC) ctx.moveTo(x, wt); else ctx.lineTo(x, wt);
+                        ctx.lineTo(x + colWidth, wt);
+                    }
+                    for (let c = maxC; c >= minC; c--) {
+                        let s = wallSlices[c];
+                        let wh = Math.min(H, H / s.dist);
+                        let wb = HALF + wh / 2;
+                        let x = c * colWidth;
+                        ctx.lineTo(x + colWidth, wb);
+                        ctx.lineTo(x, wb);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+
+                    let oX = minC * colWidth;
+                    let oW = (maxC - minC + 1) * colWidth;
+                    let midX = oX + oW / 2;
+                    let midTop = HALF - Math.min(H, H / dist) / 2;
+                    let midBot = HALF + Math.min(H, H / dist) / 2;
+
+                    if (ov.tile === 2 || ov.tile === 10) {
+                        ctx.beginPath();
+                        ctx.moveTo(oX, HALF); ctx.lineTo(oX + oW, HALF);
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.moveTo(midX, midTop); ctx.lineTo(midX, midBot);
+                        ctx.stroke();
+
+                        let avgH = Math.min(H, H / dist);
+                        if (ov.tile === 2) {
+                            ctx.beginPath();
+                            ctx.arc(midX + oW * 0.2, HALF, Math.max(2, avgH * 0.04), 0, Math.PI * 2);
+                            ctx.fill();
+                        } else if (ov.tile === 10) {
+                            let khR = Math.max(3, avgH * 0.06);
+                            ctx.beginPath();
+                            ctx.arc(midX, HALF - khR * 0.5, khR, 0, Math.PI * 2); ctx.fill();
+                            ctx.beginPath();
+                            ctx.moveTo(midX - khR * 0.5, HALF); ctx.lineTo(midX + khR * 0.5, HALF); ctx.lineTo(midX, HALF + khR * 1.5);
+                            ctx.closePath(); ctx.fill();
+                        }
+                    } 
+                }
+                
+                // --- 4. DRAW ENTITY SPRITES ---
+                sprites.sort((a, b) => {
+                    let da = (a.mx + 0.5 - px) ** 2 + (a.my + 0.5 - py) ** 2;
+                    let db = (b.mx + 0.5 - px) ** 2 + (b.my + 0.5 - py) ** 2;
+                    return db - da;
+                });
+                
+                ctx.globalAlpha = 1.0;
+                for (let sp of sprites) {
+                    let spX = sp.mx + 0.5 - px;
+                    let spY = sp.my + 0.5 - py;
+                    let cosP = Math.cos(playerAngle);
+                    let sinP = Math.sin(playerAngle);
+                    let depth = spX * cosP + spY * sinP;
+                    let lateral = -spX * sinP + spY * cosP;
+                    
+                    if (depth <= 0.1) continue;
+                    
+                    let screenX = HALF + (lateral / depth) * (W / (2 * Math.tan(FOV / 2)));
+                    let fullHeight = Math.min(H * 0.95, H / depth);
+                    
+                    let scale = 0.6;
+                    if ([5, 11].includes(sp.tile)) scale = 0.65;
+                    if ([6, 7].includes(sp.tile)) scale = 0.85; // Stairs are now massive!
+                    if (sp.tile === 8) scale = 0.45; 
+                    if (sp.tile === 4) scale = 0.35;
+                    if (sp.tile === 12) scale = 0.45;
+                    
+                    let spriteWidth = fullHeight * scale;
+                    let spriteHeight = fullHeight * scale;
+                    
+                    let wallBot = HALF + Math.min(H, H / depth) / 2;
+                    let drawX = screenX - spriteWidth / 2;
+                    let drawY = wallBot - spriteHeight;
+                    
+                    if (drawX + spriteWidth < 0 || drawX > W) continue;
+                    
+                    if (sp.tile === 5) {
+                        let key = `${sp.mx},${sp.my}`;
+                        let monId = this.mapMonsters[key];
+                        let sprite = (monId && monsterDB[monId]) ? monsterDB[monId].sprite : null;
+                        if (sprite) this.drawSpriteInRect(sprite, drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 11) {
+                        let key = `${sp.mx},${sp.my}`;
+                        let npcId = this.mapNpcs[key];
+                        let sprite = (npcId && npcDB[npcId]) ? npcDB[npcId].sprite : null;
+                        if (sprite) this.drawSpriteInRect(sprite, drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 8) { this.drawChestSprite(drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 4) { this.drawItem(drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 6) { this.drawStairsUp(drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 7) { this.drawStairsDown(drawX, drawY, spriteWidth, spriteHeight);
+                    } else if (sp.tile === 12) { this.drawWin(drawX, drawY, spriteWidth, spriteHeight); }
+                }
+
+                this.renderMinimap();
+            }
+        };
+
+        window.onload = () => Game.init();
+    </script>
+</body>
+</html>
