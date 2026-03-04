@@ -106,11 +106,13 @@ h2, h3 { margin-top: 0; color: var(--ink); }
 .tile-6 { background-color: #7a5090; } /* Stairs Up */
 .tile-7 { background-color: #5a3a7a; } /* Stairs Down */
 .tile-8 { background-color: #c48a30; } /* Chest */
-.tile-9 { background-color: var(--accent-green); } 
+.tile-9 { background-color: #6d5040; } /* Breakable Wall */
 .tile-10 { background-color: #3a6a6a; } /* Locked Door */
 .tile-11 { background-color: #3a6a3a; } /* NPC */
 .tile-12 { background-color: #c4a030; } /* Win Trigger */
 .tile-13 { background-color: #9e8e7e; } /* Illusionary Wall */
+.tile-14 { background-color: #d4a574; } /* Lore Scroll */
+.tile-15 { background-color: #a04040; } /* Trap */
 
 .toolbar {
     background: var(--bg-panel);
@@ -147,3 +149,15 @@ select, input { padding: 6px; background: #fff; color: var(--ink); border: 1px s
 .ink-cell { width: 12px; height: 12px; background-color: #fdfcf0; }
 .ink-cell.inked { background-color: var(--ink); }
 .hint-text { font-size: 11px; color: var(--text-dim); }
+
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+}
+.modal-box {
+    background: var(--bg-panel); border: 2px solid var(--border-color);
+    padding: 20px; min-width: 240px; max-width: 300px;
+    box-shadow: 2px 4px 12px rgba(0,0,0,0.25);
+}

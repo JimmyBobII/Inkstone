@@ -153,6 +153,16 @@
 </head>
 <body>
     <h2>{{ db_data.gameName or 'The Grimoire Engine' }}</h2>
+
+    <div id="playtest-bar" style="display:none; background:#3a2a4a; border:2px solid #8a5ac4; padding:8px 12px; margin-bottom:10px; width:100%; max-width:800px; box-sizing:border-box; font-size:12px; color:#e0d8f0; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center;">
+        <span style="font-weight:bold; color:#c4a0ff;">PLAYTEST</span>
+        <label>Floor: <select id="pt-floor" style="background:#2a2030; color:#e0d8f0; border:1px solid #8a5ac4; padding:2px 4px;"></select></label>
+        <label>X: <input id="pt-x" type="number" min="0" max="19" value="10" style="width:40px; background:#2a2030; color:#e0d8f0; border:1px solid #8a5ac4; padding:2px;"></label>
+        <label>Y: <input id="pt-y" type="number" min="0" max="19" value="10" style="width:40px; background:#2a2030; color:#e0d8f0; border:1px solid #8a5ac4; padding:2px;"></label>
+        <button id="pt-warp" style="background:#8a5ac4; color:#fff; border:none; padding:4px 10px; cursor:pointer; font-weight:bold;">Warp</button>
+        <label style="cursor:pointer;"><input type="checkbox" id="pt-godmode"> God Mode</label>
+    </div>
+
     <div id="victory-screen">
         <h1>VICTORY</h1>
         <p id="victory-text"></p>
@@ -286,6 +296,7 @@
         rawNpcs.forEach(n => npcDB[n.id] = n);
 
         const rawMusic = {{ (db_data.music or {'town': None, 'floors': {}}) | tojson | safe }};
+        const PLAYTEST_MODE = {{ 'true' if playtest is defined and playtest else 'false' }};
 
         // --- MUSIC ENGINE ---
         const MusicEngine = {
@@ -388,6 +399,9 @@
             mapDoors: null,  
             mapNpcs: null,   
             mapWins: null,   
+            mapLore: null,
+            mapTraps: null,
+            mapBreakwalls: null,
             completedNpcs: new Set(), 
             explored: [], 
             minimapVisible: true,
@@ -419,7 +433,65 @@
                 this.renderMinimap(); 
                 this.setupInput();
 
-                this.showTitleScreen();
+                if (PLAYTEST_MODE) {
+                    this.initPlaytest();
+                } else {
+                    this.showTitleScreen();
+                }
+            },
+
+            initPlaytest() {
+                // Auto-create a test party from available classes
+                let classIds = Object.keys(classDB);
+                if (classIds.length === 0) {
+                    alert("No classes in database! Create at least one class before playtesting.");
+                    return;
+                }
+                for (let i = 0; i < 3; i++) {
+                    let cls = classDB[classIds[i % classIds.length]];
+                    this.party.push({
+                        name: `Tester ${i + 1}`,
+                        classId: cls.id, className: cls.name,
+                        level: 5, xp: 0,
+                        hp: cls.baseHp + 25, maxHp: cls.baseHp + 25,
+                        atk: cls.baseAtk + 5,
+                        spellsLeft: cls.baseSpells + 3, maxSpells: cls.baseSpells + 3,
+                        weapon: null
+                    });
+                }
+                this.gold = 500;
+
+                // Show debug bar
+                let bar = document.getElementById('playtest-bar');
+                bar.style.display = 'flex';
+                let floorSel = document.getElementById('pt-floor');
+                this.floors.forEach((_, i) => {
+                    floorSel.innerHTML += `<option value="${i}">Floor ${i + 1}</option>`;
+                });
+
+                document.getElementById('pt-warp').addEventListener('click', () => {
+                    let f = parseInt(document.getElementById('pt-floor').value);
+                    let x = parseInt(document.getElementById('pt-x').value);
+                    let y = parseInt(document.getElementById('pt-y').value);
+                    if (f >= 0 && f < this.floors.length) this.loadFloor(f, true);
+                    if (x >= 0 && x < 20 && y >= 0 && y < 20) {
+                        this.player.x = x; this.player.y = y;
+                    }
+                    this.log(`Warped to Floor ${f + 1} (${x}, ${y})`);
+                    this.render();
+                });
+
+                // Skip title and party creation, go straight to dungeon
+                document.getElementById('title-screen').style.display = 'none';
+                document.getElementById('party-creation-screen').style.display = 'none';
+                document.getElementById('town-screen').style.display = 'none';
+                document.getElementById('viewport').style.display = 'block';
+                document.getElementById('controls-container').style.display = 'flex';
+                this.state = "exploration";
+                this.loadFloor(0, true);
+                this.updateUI();
+                this.log("PLAYTEST MODE — God Mode available. Use debug bar to warp.");
+                this.render();
             },
 
             showTitleScreen() {
@@ -553,6 +625,9 @@
                 this.mapDoors = this.floors[fIndex].placements.doors || {};
                 this.mapNpcs = this.floors[fIndex].placements.npcs || {};
                 this.mapWins = this.floors[fIndex].placements.wins || {};
+                this.mapLore = this.floors[fIndex].placements.lore || {};
+                this.mapTraps = this.floors[fIndex].placements.traps || {};
+                this.mapBreakwalls = this.floors[fIndex].placements.breakwalls || {};
                 
                 let spawnFound = false;
                 let targetTile = goingDown ? 6 : 7; 
@@ -1052,6 +1127,37 @@
                                 }
                                 interacted = true;
                             }
+                            else if (targetTile === 9) {
+                                let bwData = this.mapBreakwalls[keyStr];
+                                if (!bwData || !bwData.weaponId) {
+                                    this.mapGrid[tY][tX] = 0;
+                                    this.log("The wall crumbles easily.");
+                                } else {
+                                    let reqId = bwData.weaponId;
+                                    let weaponObj = itemDB[reqId];
+                                    let weaponName = weaponObj ? weaponObj.name : 'the right weapon';
+                                    // Check inventory
+                                    let hasInInventory = this.inventory.some(i => i.id === reqId);
+                                    // Check equipped weapons
+                                    let hasEquipped = this.party.some(m => m.weapon && m.weapon.id === reqId);
+                                    if (hasInInventory || hasEquipped) {
+                                        this.mapGrid[tY][tX] = 0;
+                                        delete this.mapBreakwalls[keyStr];
+                                        if (bwData.subtype === 'sealed') {
+                                            this.log(`The ${weaponName} glows — the magical seal shatters!`);
+                                        } else {
+                                            this.log(`You smash through the cracked wall with the ${weaponName}!`);
+                                        }
+                                    } else {
+                                        if (bwData.subtype === 'sealed') {
+                                            this.log(`A magical seal blocks the way. You sense you need a ${weaponName}.`);
+                                        } else {
+                                            this.log(`The wall is cracked but won't budge. You need a ${weaponName}.`);
+                                        }
+                                    }
+                                }
+                                interacted = true;
+                            }
                             else if (targetTile === 8) {
                                 let chestData = this.mapChests[keyStr];
                                 if (chestData) {
@@ -1125,10 +1231,39 @@
 
                     let inBounds = newX >= 0 && newX < 20 && newY >= 0 && newY < 20;
 
-                    if (!interacted && inBounds && [0, 3, 4, 5, 12, 13].includes(this.mapGrid[newY][newX])) {
+                    if (!interacted && inBounds && [0, 3, 4, 5, 12, 13, 14, 15].includes(this.mapGrid[newY][newX])) {
                         this.player.x = newX; this.player.y = newY;
                         if (this.mapGrid[newY][newX] === 4) this.pickupItem(newX, newY);
                         if (this.mapGrid[newY][newX] === 5) this.startCombat(newX, newY);
+                        if (this.mapGrid[newY][newX] === 15) {
+                            let trapKey = `${newX},${newY}`;
+                            let trapData = this.mapTraps[trapKey];
+                            if (trapData) {
+                                let alive = this.party.filter(m => m.hp > 0);
+                                if (alive.length > 0) {
+                                    let victim = alive[Math.floor(Math.random() * alive.length)];
+                                    let dmg = trapData.damage || 5;
+                                    victim.hp = Math.max(0, victim.hp - dmg);
+                                    const labels = { pit: "A pit opens underfoot!", spikes: "Spikes shoot from the floor!", darts: "Darts fly from the walls!" };
+                                    this.log(labels[trapData.subtype] || "A trap triggers!");
+                                    this.log(`${victim.name} takes ${dmg} damage!`);
+                                    if (victim.hp <= 0) this.log(`${victim.name} has fallen!`);
+                                    if (this.party.every(m => m.hp <= 0)) { this.triggerGameOver(); return; }
+                                    this.updateUI();
+                                }
+                            }
+                        }
+                        if (this.mapGrid[newY][newX] === 14) {
+                            let loreKey = `${newX},${newY}`;
+                            let loreData = this.mapLore[loreKey];
+                            if (loreData) {
+                                this.log(`You read a scroll: "${loreData.text}"`);
+                                if (!loreData.persist) {
+                                    this.mapGrid[newY][newX] = 0;
+                                    delete this.mapLore[loreKey];
+                                }
+                            }
+                        }
                         if (this.mapGrid[newY][newX] === 12) {
                             let winKey = `${newX},${newY}`;
                             let winMsg = this.mapWins[winKey] || "You win!";
@@ -1379,6 +1514,10 @@
                         this.log(`${enemy.name} attacks ${target.name} for ${eDmg}!`); 
                     }
                     
+                    if (PLAYTEST_MODE && document.getElementById('pt-godmode') && document.getElementById('pt-godmode').checked) {
+                        eDmg = 0;
+                        this.log(`[GOD MODE] ${enemy.name}'s attack blocked!`);
+                    }
                     target.hp -= eDmg;
                     if (target.hp < 0) target.hp = 0;
                     
@@ -1508,7 +1647,7 @@
             },
 
             // --- RENDERING ---
-            isWallType(t) { return [1, 2, 10, 13].includes(t); },
+            isWallType(t) { return [1, 2, 9, 10, 13].includes(t); },
 
             drawItem(bx, by, bw, bh) {
                 let cx = bx + bw / 2; let cy = by + bh * 0.7;
@@ -1562,6 +1701,85 @@
                 this.ctx.moveTo(cx, cy - r); this.ctx.lineTo(cx, cy + r);
                 this.ctx.moveTo(cx - r, cy); this.ctx.lineTo(cx + r, cy); this.ctx.stroke();
                 this.ctx.beginPath(); this.ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); this.ctx.stroke();
+            },
+
+            drawLoreScroll(bx, by, bw, bh) {
+                let cx = bx + bw / 2; let cy = by + bh * 0.5;
+                let sw = bw * 0.5; let sh = bh * 0.7;
+                let sx = cx - sw / 2; let sy = cy - sh / 2;
+                this.ctx.fillStyle = "#fdfcf0"; this.ctx.fillRect(sx, sy, sw, sh);
+                this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2; this.ctx.strokeRect(sx, sy, sw, sh);
+                let rollR = sw * 0.12;
+                this.ctx.fillStyle = "#e8dcc8";
+                this.ctx.beginPath(); this.ctx.arc(sx + sw / 2, sy, rollR, 0, Math.PI * 2); this.ctx.fill(); this.ctx.stroke();
+                this.ctx.beginPath(); this.ctx.arc(sx + sw / 2, sy + sh, rollR, 0, Math.PI * 2); this.ctx.fill(); this.ctx.stroke();
+                this.ctx.strokeStyle = "#8a7040"; this.ctx.lineWidth = 1;
+                for (let i = 1; i <= 3; i++) {
+                    let ly = sy + sh * (i / 4);
+                    this.ctx.beginPath(); this.ctx.moveTo(sx + sw * 0.15, ly); this.ctx.lineTo(sx + sw * 0.85, ly); this.ctx.stroke();
+                }
+            },
+
+            drawTrapPit(bx, by, bw, bh) {
+                // Dark oval hole in the floor
+                let cx = bx + bw / 2; let cy = by + bh * 0.6;
+                let rx = bw * 0.35; let ry = bh * 0.2;
+                this.ctx.fillStyle = "#1a1008";
+                this.ctx.beginPath(); this.ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); this.ctx.fill();
+                this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2;
+                this.ctx.beginPath(); this.ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); this.ctx.stroke();
+                // Highlight edge
+                this.ctx.strokeStyle = "#5a4a30"; this.ctx.lineWidth = 1;
+                this.ctx.beginPath(); this.ctx.ellipse(cx, cy - ry * 0.15, rx * 0.85, ry * 0.6, 0, Math.PI, Math.PI * 2); this.ctx.stroke();
+            },
+
+            drawTrapSpikes(bx, by, bw, bh) {
+                // Row of upward-pointing spikes
+                let baseY = by + bh * 0.75;
+                let spikeH = bh * 0.4;
+                let count = 5;
+                let gap = bw * 0.7 / count;
+                let startX = bx + bw * 0.15;
+                this.ctx.fillStyle = "#888";
+                this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 1.5;
+                for (let i = 0; i < count; i++) {
+                    let sx = startX + i * gap + gap / 2;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(sx - gap * 0.3, baseY);
+                    this.ctx.lineTo(sx, baseY - spikeH);
+                    this.ctx.lineTo(sx + gap * 0.3, baseY);
+                    this.ctx.closePath();
+                    this.ctx.fill(); this.ctx.stroke();
+                }
+                // Base line
+                this.ctx.strokeStyle = "#555"; this.ctx.lineWidth = 2;
+                this.ctx.beginPath(); this.ctx.moveTo(startX, baseY); this.ctx.lineTo(startX + count * gap, baseY); this.ctx.stroke();
+            },
+
+            drawTrapDarts(bx, by, bw, bh) {
+                // Small horizontal darts / arrows
+                let cx = bx + bw / 2; let cy = by + bh * 0.5;
+                this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2;
+                // Three dart shafts
+                for (let i = -1; i <= 1; i++) {
+                    let dy = cy + i * bh * 0.15;
+                    let sx = cx - bw * 0.25; let ex = cx + bw * 0.25;
+                    this.ctx.beginPath(); this.ctx.moveTo(sx, dy); this.ctx.lineTo(ex, dy); this.ctx.stroke();
+                    // Arrowhead
+                    this.ctx.fillStyle = "#888";
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(ex, dy);
+                    this.ctx.lineTo(ex - bw * 0.06, dy - bh * 0.04);
+                    this.ctx.lineTo(ex - bw * 0.06, dy + bh * 0.04);
+                    this.ctx.closePath(); this.ctx.fill();
+                    // Fletching
+                    this.ctx.strokeStyle = "#8b3030"; this.ctx.lineWidth = 1;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(sx, dy); this.ctx.lineTo(sx - bw * 0.04, dy - bh * 0.03);
+                    this.ctx.moveTo(sx, dy); this.ctx.lineTo(sx - bw * 0.04, dy + bh * 0.03);
+                    this.ctx.stroke();
+                    this.ctx.strokeStyle = "#111"; this.ctx.lineWidth = 2;
+                }
             },
 
             drawSpriteInRect(sprite, bx, by, bw, bh) {
@@ -1714,7 +1932,7 @@
                     for(let x=0; x<20; x++) {
                         if(exp && exp[y][x]) {
                             let tile = this.mapGrid[y][x];
-                            if(tile === 1 || tile === 13) { this.miniCtx.fillStyle = "#222"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
+                            if(tile === 1 || tile === 13 || tile === 9) { this.miniCtx.fillStyle = "#222"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
                             else if(tile === 0 || tile === 3) { 
                                 this.miniCtx.strokeStyle = "#ccc"; this.miniCtx.strokeRect(x*tSize, y*tSize, tSize, tSize); 
                                 if(tile === 3) { this.miniCtx.strokeStyle = "#3a7ca5"; this.miniCtx.strokeRect(x*tSize+1, y*tSize+1, tSize-2, tSize-2); }
@@ -1728,6 +1946,8 @@
                             else if(tile === 10) { this.miniCtx.fillStyle = "#006064"; this.miniCtx.fillRect(x*tSize, y*tSize, tSize, tSize); }
                             else if(tile === 11) { this.miniCtx.fillStyle = "#2e7d32"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
                             else if(tile === 12) { this.miniCtx.fillStyle = "#ffd700"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 14) { this.miniCtx.fillStyle = "#fdfcf0"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
+                            else if(tile === 15) { this.miniCtx.fillStyle = "#a04040"; this.miniCtx.fillRect(x*tSize+2, y*tSize+2, tSize-4, tSize-4); }
                         }
                     }
                 }
@@ -2012,7 +2232,7 @@
                         
                         let tile = this.mapGrid[mapY][mapX];
                         
-                        if (!hit && [4, 5, 6, 7, 8, 11, 12].includes(tile)) {
+                        if (!hit && [4, 5, 6, 7, 8, 11, 12, 14, 15].includes(tile)) {
                             let sprKey = `${mapX},${mapY}`;
                             if (!spriteSet.has(sprKey)) {
                                 spriteSet.add(sprKey);
@@ -2039,7 +2259,7 @@
                     
                     wallSlices.push({ col, dist: corrDist, rawDist: dist, tile: hitTile, side, mapX, mapY, wallX });
 
-                    if ([2, 10].includes(hitTile)) {
+                    if ([2, 9, 10].includes(hitTile)) {
                         let oKey = `${mapX},${mapY}`;
                         if (!wallOverlays[oKey]) {
                             wallOverlays[oKey] = { tile: hitTile, minCol: col, maxCol: col, dist: corrDist, side };
@@ -2069,7 +2289,7 @@
                     ctx.fillRect(x - 0.5, wt, colWidth + 1.5, wh); 
 
                     // Procedural Brickwork
-                    if (s.tile === 1) {
+                    if (s.tile === 1 || s.tile === 9) {
                         ctx.globalAlpha = shadeAlpha;
                         ctx.fillStyle = "#111";
                         
@@ -2223,6 +2443,52 @@
                             ctx.closePath(); ctx.fill();
                         }
                     } 
+
+                    // Breakable Wall Overlays
+                    if (ov.tile === 9) {
+                        let bwData = this.mapBreakwalls[oKey];
+                        let subtype = bwData ? bwData.subtype : 'cracked';
+                        let avgH = Math.min(H, H / dist);
+
+                        if (subtype === 'sealed') {
+                            // Magic glyphs — circle with lines radiating out
+                            ctx.strokeStyle = "#7a5ac4"; ctx.lineWidth = Math.max(2, avgH * 0.015);
+                            ctx.globalAlpha = fadeAlpha * 0.9;
+                            let glR = Math.max(4, avgH * 0.1);
+                            ctx.beginPath(); ctx.arc(midX, HALF, glR, 0, Math.PI * 2); ctx.stroke();
+                            // Inner circle
+                            ctx.beginPath(); ctx.arc(midX, HALF, glR * 0.5, 0, Math.PI * 2); ctx.stroke();
+                            // Radiating lines
+                            for (let a = 0; a < 4; a++) {
+                                let angle = a * Math.PI / 2 + Math.PI / 4;
+                                ctx.beginPath();
+                                ctx.moveTo(midX + Math.cos(angle) * glR * 0.6, HALF + Math.sin(angle) * glR * 0.6);
+                                ctx.lineTo(midX + Math.cos(angle) * glR * 1.4, HALF + Math.sin(angle) * glR * 1.4);
+                                ctx.stroke();
+                            }
+                        } else {
+                            // Cracked — jagged lines across the wall face
+                            ctx.strokeStyle = "#111"; ctx.lineWidth = Math.max(1.5, avgH * 0.012);
+                            ctx.globalAlpha = fadeAlpha * 0.8;
+                            // Main diagonal crack
+                            ctx.beginPath();
+                            ctx.moveTo(midX - oW * 0.3, midTop + avgH * 0.2);
+                            ctx.lineTo(midX - oW * 0.05, HALF - avgH * 0.05);
+                            ctx.lineTo(midX + oW * 0.1, HALF + avgH * 0.05);
+                            ctx.lineTo(midX + oW * 0.3, midBot - avgH * 0.15);
+                            ctx.stroke();
+                            // Branch crack
+                            ctx.beginPath();
+                            ctx.moveTo(midX - oW * 0.05, HALF - avgH * 0.05);
+                            ctx.lineTo(midX + oW * 0.25, HALF - avgH * 0.15);
+                            ctx.stroke();
+                            // Small branch
+                            ctx.beginPath();
+                            ctx.moveTo(midX + oW * 0.1, HALF + avgH * 0.05);
+                            ctx.lineTo(midX - oW * 0.15, HALF + avgH * 0.2);
+                            ctx.stroke();
+                        }
+                    }
                 }
                 
                 // --- 4. DRAW ENTITY SPRITES ---
@@ -2252,6 +2518,8 @@
                     if (sp.tile === 8) scale = 0.45; 
                     if (sp.tile === 4) scale = 0.35;
                     if (sp.tile === 12) scale = 0.45;
+                    if (sp.tile === 14) scale = 0.4;
+                    if (sp.tile === 15) scale = 0.4;
                     
                     let spriteWidth = fullHeight * scale;
                     let spriteHeight = fullHeight * scale;
@@ -2277,6 +2545,15 @@
                     } else if (sp.tile === 6) { this.drawStairsUp(drawX, drawY, spriteWidth, spriteHeight);
                     } else if (sp.tile === 7) { this.drawStairsDown(drawX, drawY, spriteWidth, spriteHeight);
                     } else if (sp.tile === 12) { this.drawWin(drawX, drawY, spriteWidth, spriteHeight); }
+                    else if (sp.tile === 14) { this.drawLoreScroll(drawX, drawY, spriteWidth, spriteHeight); }
+                    else if (sp.tile === 15) {
+                        let trapKey = `${sp.mx},${sp.my}`;
+                        let trapData = this.mapTraps[trapKey];
+                        let subtype = trapData ? trapData.subtype : 'pit';
+                        if (subtype === 'spikes') this.drawTrapSpikes(drawX, drawY, spriteWidth, spriteHeight);
+                        else if (subtype === 'darts') this.drawTrapDarts(drawX, drawY, spriteWidth, spriteHeight);
+                        else this.drawTrapPit(drawX, drawY, spriteWidth, spriteHeight);
+                    }
                 }
 
                 this.renderMinimap();

@@ -64,7 +64,7 @@ DEFAULT_DB = {
 def get_empty_floor():
     return {
         "grid": [[0 for _ in range(20)] for _ in range(20)],
-        "placements": {"items": {}, "monsters": {}, "chests": {}, "doors": {}, "npcs": {}, "wins": {}}
+        "placements": {"items": {}, "monsters": {}, "chests": {}, "doors": {}, "npcs": {}, "wins": {}, "lore": {}, "traps": {}, "breakwalls": {}}
     }
 
 def get_default_map():
@@ -96,6 +96,12 @@ def load_map():
                     floor.setdefault("placements", {})["npcs"] = {}
                 if "wins" not in floor.get("placements", {}):
                     floor.setdefault("placements", {})["wins"] = {}
+                if "lore" not in floor.get("placements", {}):
+                    floor.setdefault("placements", {})["lore"] = {}
+                if "traps" not in floor.get("placements", {}):
+                    floor.setdefault("placements", {})["traps"] = {}
+                if "breakwalls" not in floor.get("placements", {}):
+                    floor.setdefault("placements", {})["breakwalls"] = {}
             return jsonify(data)
     return jsonify(get_default_map())
 
@@ -137,6 +143,39 @@ def load_db():
             return jsonify(db_data)
     return jsonify(DEFAULT_DB)
 
+@app.route('/playtest')
+def playtest():
+    if os.path.exists(MAP_FILE):
+        with open(MAP_FILE, 'r') as f:
+            map_data = json.load(f)
+        if isinstance(map_data, dict) and "grid" in map_data:
+            map_data = [map_data]
+        for floor in map_data:
+            p = floor.setdefault("placements", {})
+            for key in ["chests", "doors", "npcs", "wins", "lore", "traps", "breakwalls"]:
+                if key not in p:
+                    p[key] = {}
+    else:
+        map_data = get_default_map()
+
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, 'r') as f:
+            db_data = json.load(f)
+    else:
+        db_data = DEFAULT_DB
+
+    if "town" not in db_data: db_data["town"] = DEFAULT_DB["town"]
+    if "npcs" not in db_data: db_data["npcs"] = []
+    if "spells" not in db_data: db_data["spells"] = DEFAULT_DB["spells"]
+    if "classes" not in db_data: db_data["classes"] = DEFAULT_DB["classes"]
+    if "gameName" not in db_data: db_data["gameName"] = "The Grimoire Engine"
+    if "shopGreeting" not in db_data.get("town", {}):
+        db_data.setdefault("town", {})["shopGreeting"] = "Welcome to my shop. Have a look around."
+    if "music" not in db_data: db_data["music"] = {"town": None, "floors": {}}
+    if "introText" not in db_data: db_data["introText"] = ""
+
+    return render_template('game_template.html', map_data=map_data, db_data=db_data, playtest=True)
+
 @app.route('/api/export_game', methods=['POST'])
 def export_game():
     if os.path.exists(MAP_FILE):
@@ -153,6 +192,12 @@ def export_game():
                 floor.setdefault("placements", {})["npcs"] = {}
             if "wins" not in floor.get("placements", {}):
                 floor.setdefault("placements", {})["wins"] = {}
+            if "lore" not in floor.get("placements", {}):
+                floor.setdefault("placements", {})["lore"] = {}
+            if "traps" not in floor.get("placements", {}):
+                floor.setdefault("placements", {})["traps"] = {}
+            if "breakwalls" not in floor.get("placements", {}):
+                floor.setdefault("placements", {})["breakwalls"] = {}
     else:
         map_data = get_default_map()
 
@@ -188,7 +233,7 @@ def export_game():
         export_path = os.path.join(EXPORT_DIR, f'{safe_name}.html')
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        return jsonify({"status": "success", "message": "Game Exported!"})
+        return jsonify({"status": "success", "message": "Game Exported!", "html": html_content})
     except Exception as e:
         return jsonify({"status": "error", "message": "Template missing or error: " + str(e)}), 500
 

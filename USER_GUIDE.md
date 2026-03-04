@@ -221,10 +221,15 @@ The toolbar across the top shows every tile type. Click one to select it, then c
 | NPC | Places an NPC. Select which one. Press E to interact. |
 | Win Trigger | Walking onto this tile triggers the victory screen. Enter victory text. |
 | Illusion Wall | Looks like a wall but players can walk through it. Brickwork is subtly different as a visual clue. |
+| Lore Scroll | A readable scroll on the ground. The player steps on it, reads the message, then it vanishes. Enter the scroll text in the input that appears. |
+| Trap | A damage tile. Select a trap type (Pit, Spikes, or Darts) and set the damage amount. Deals damage to a random living party member when stepped on. |
+| Breakable Wall | Looks and blocks like a wall, but can be destroyed with a specific weapon. Choose Cracked or Sealed and select which weapon breaks it. Press E to attempt. |
 
 ### Floors
 
 Your dungeon can have up to 20 floors. Use the floor controls above the grid: the Current Floor dropdown to switch between floors, Add Floor to create a new empty floor, and Delete Floor to permanently remove the current floor.
+
+When you click Add Floor, a template picker appears with three options: Empty (all floor tiles), Border Walls (walls around the edges with open floor inside), and Maze (an auto-generated maze using a recursive backtracker algorithm). The maze template gives you a ready-made labyrinth to place monsters and items in — a great starting point if you do not want to draw corridors by hand.
 
 ### Connecting Floors with Stairs
 
@@ -236,6 +241,27 @@ Floors connect via stairs. Place Stairs Down on a floor, then switch to the next
 
 - **Save Map** — saves your map layout to disk. Does NOT save database changes.
 - **Export Game** — saves the map first, then combines everything into a playable HTML file in the exports folder. Open that HTML file in any web browser to play.
+- **Test Play** — saves the map and opens a playtest version in a new tab. The playtest starts you directly in the dungeon with an auto-generated level 5 party and 500 gold, skipping the title screen and party creation. A debug bar at the top lets you warp to any floor and coordinates, and a God Mode checkbox makes your party invulnerable. Use this for quick testing without having to play through the full game flow each time.
+
+### Drawing Tools
+
+By default, you paint tiles by clicking and dragging (freehand mode). Two additional modes are available via toggle buttons in the toolbar:
+
+- **Line Mode** — click a start tile, then click an end tile. A straight line of the current tile type is drawn between them using Bresenham's algorithm. Great for long corridors and straight walls.
+- **Rect Mode** — click one corner, then click the opposite corner. The entire rectangle is filled with the current tile type. Perfect for rooms and large open areas.
+
+Line and Rect modes are mutually exclusive — activating one turns the other off. Both work with every tile type, including items, monsters, and special tiles.
+
+### Undo and Redo
+
+The map editor supports undo and redo for all drawing operations (freehand strokes, lines, and rectangles). Each operation saves a complete snapshot of the current floor's grid and all placements.
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+Z | Undo the last edit |
+| Ctrl+Y (or Ctrl+Shift+Z) | Redo an undone edit |
+
+The undo history stores up to 30 steps. Making a new edit clears the redo stack, as with any standard editor. Undo/redo only works when the Map Editor tab is active.
 
 ---
 
@@ -275,6 +301,27 @@ Illusionary walls look like normal walls but players can walk through them. The 
 - Use them to hide secret rooms with bonus treasure.
 - Place them at dead ends so curious players who bump into walls are rewarded.
 - Don't overuse them. If every wall might be fake, the mystery is gone.
+
+### Breakable Walls
+
+Breakable walls block movement like regular walls but can be destroyed by pressing E while holding the right weapon. There are two subtypes:
+
+- **Cracked** — visually shows cracks in the brickwork. The flavour text says you smash through it with the weapon.
+- **Sealed** — shows purple magic glyphs. The flavour text says the weapon shatters the magical seal.
+
+The weapon is not consumed when breaking the wall — the player keeps it. If the player does not have the required weapon (in inventory or equipped on any hero), they get a hint telling them what they need. Use breakable walls to gate areas behind weapon-based progression: find the Warhammer, then smash through the cracked wall to reach the treasure room.
+
+### Lore Scrolls
+
+Lore scrolls are readable text tiles placed on the dungeon floor. When a player steps on one, the scroll's message appears in the log and the scroll vanishes. Use them for world-building, hints, warnings, or story fragments scattered through the dungeon. They do not block movement or trigger combat.
+
+### Traps
+
+Trap tiles deal damage to a random living party member when stepped on. Three visual subtypes are available (Pit, Spikes, Darts) — each has different flavour text but they all work the same way. Set the damage amount when placing the trap.
+
+- Visible in the 3D view as floor sprites, giving alert players a chance to spot and avoid them.
+- If a trap kills the last living party member, it triggers a game over.
+- Use traps to make corridors dangerous and reward players who pay attention to the environment.
 
 ### Difficulty and Pacing
 
@@ -362,7 +409,7 @@ The game ends in victory when the player either walks onto a Win Trigger tile or
 | S | Move backward |
 | A | Turn left |
 | D | Turn right |
-| E | Interact (open/close doors, open chests, talk to NPCs, unlock locked doors) |
+| E | Interact (open/close doors, open chests, talk to NPCs, unlock locked doors, break walls) |
 | M | Toggle minimap on/off |
 | N | Toggle music on/off |
 
